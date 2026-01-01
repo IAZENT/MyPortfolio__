@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Theme tokens (CSS variables) */
+:root {
+  --bg0: #000000;
+  --bg1: #0a0a0a;
+  --panel: rgba(17, 17, 17, 0.62);
+  --panel-strong: rgba(17, 17, 17, 0.82);
+  --text: #ffffff;
+  --muted: #a3a3a3;
+  --border: #262626;
+  --accent: #ef4444;
+  --accent2: #991b1b;
+  --success: #22c55e;
+
+  --grid: rgba(239, 68, 68, 0.08);
+  --glow: rgba(239, 68, 68, 0.45);
+}
+
+.theme-matrix {
+  --accent: #00ff00;
+  --accent2: #16a34a;
+  --success: #00ff00;
+  --grid: rgba(0, 255, 0, 0.08);
+  --glow: rgba(0, 255, 0, 0.42);
+}
+
+.theme-purple {
+  --accent: #a855f7;
+  --accent2: #06b6d4;
+  --success: #22c55e;
+  --grid: rgba(168, 85, 247, 0.08);
+  --glow: rgba(168, 85, 247, 0.38);
+}
+
+.theme-blue {
+  --bg0: #0b1222;
+  --bg1: #0f172a;
+  --panel: rgba(15, 23, 42, 0.62);
+  --panel-strong: rgba(15, 23, 42, 0.82);
+  --border: #1f2a44;
+  --accent: #3b82f6;
+  --accent2: #1d4ed8;
+  --success: #22c55e;
+  --grid: rgba(59, 130, 246, 0.08);
+  --glow: rgba(59, 130, 246, 0.38);
+}
+
+.theme-light {
+  --bg0: #ffffff;
+  --bg1: #f5f5f5;
+  --panel: rgba(255, 255, 255, 0.72);
+  --panel-strong: rgba(255, 255, 255, 0.92);
+  --text: #0a0a0a;
+  --muted: #404040;
+  --border: #e5e5e5;
+  --accent: #ef4444;
+  --accent2: #991b1b;
+  --success: #16a34a;
+  --grid: rgba(239, 68, 68, 0.08);
+  --glow: rgba(239, 68, 68, 0.28);
+}
+
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  background: radial-gradient(1200px 800px at 70% 10%, rgba(239, 68, 68, 0.14), transparent 60%),
+    radial-gradient(900px 700px at 20% 60%, rgba(239, 68, 68, 0.08), transparent 60%),
+    linear-gradient(180deg, var(--bg0), var(--bg1));
+  color: var(--text);
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+::selection {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+/* Subtle grid background utility */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, var(--grid) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+    background-size: 50px 50px;
+    background-position: center;
+  }
+
+  .glass {
+    background: var(--panel);
+    border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+    backdrop-filter: blur(18px);
+  }
+
+  .glass-strong {
+    background: var(--panel-strong);
+    border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+    backdrop-filter: blur(22px);
+  }
+
+  .neon {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent),
+      0 0 24px var(--glow);
+  }
+
+  .focus-ring {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+}
