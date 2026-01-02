@@ -238,24 +238,12 @@ export default function AdminApp({ profile }: { profile: ProfileRow }) {
   const setSection = (next: AdminSection) => {
     const sp = new URLSearchParams(params.toString());
     sp.set("section", next);
-    router.replace(`/rt-admin-cosmic?${sp.toString()}`);
+    router.replace(`/admin?${sp.toString()}`);
   };
 
   async function signOut() {
     await supabase.auth.signOut();
-    try {
-      // clear server-side cookies
-      try {
-        await fetch('/api/auth/sync', { method: 'DELETE' });
-      } catch {}
-
-      // clear client cookies set on login so server doesn't see stale tokens
-      document.cookie = "sb-access-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-      document.cookie = "sb-refresh-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-    } catch (e) {
-      // ignore
-    }
-    router.replace("/rt-admin-cosmic/login");
+    router.replace("/admin/login");
     router.refresh();
   }
 

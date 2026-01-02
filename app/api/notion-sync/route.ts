@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import pdfParse from "pdf-parse";
-import { createClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 async function requireEditorOrAdmin() {
-  const supabase = await createClient();
+  const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -20,7 +19,8 @@ async function requireEditorOrAdmin() {
     .eq("id", user.id)
     .maybeSingle();
 
-  if (!profile || (profile.role !== "admin" && profile.role !== "editor")) {
+  const profileAny = profile as any;
+  if (!profileAny || (profileAny.role !== "admin" && profileAny.role !== "editor")) {
     return { ok: false as const, res: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
   }
 
@@ -43,6 +43,10 @@ export async function POST(req: Request) {
 
   const ab = await res.arrayBuffer();
   const buf = Buffer.from(ab);
+
+  // dynamic import to be compatible with ESM shapes
+  const pdfModule: any = await import("pdf-parse");
+  const pdfParse = pdfModule.default ?? pdfModule;
 
   const out = await pdfParse(buf);
   const text = (out.text ?? "").trim();

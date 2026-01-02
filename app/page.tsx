@@ -779,14 +779,7 @@ export default function Home() {
               <span className="hidden sm:block">{currentThemeLabel}</span>
             </button>
 
-            <a
-              href="/admin"
-              aria-label="Admin"
-              className="glass inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-[var(--muted)] transition hover:text-[var(--text)] focus-ring"
-            >
-              <Lock className="h-4 w-4 text-[var(--accent)]" />
-              <span className="hidden sm:block">Admin</span>
-            </a>
+            {/* Admin access hidden */}
           </div>
         </nav>
       </header>
@@ -873,7 +866,7 @@ export default function Home() {
                     <div className="absolute inset-2 overflow-hidden rounded-[32px] bg-[color-mix(in_srgb,var(--bg1)_70%,transparent)]">
                       <div className="absolute inset-0 bg-[radial-gradient(700px_320px_at_50%_10%,rgba(255,255,255,0.08),transparent_55%)]" />
                       <Image
-                        src="https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=1400&auto=format&fit=crop"
+                        src="https://images.unsplash.com/photo-1764452008254-eed469a4fad3?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
                         alt="Abstract cybersecurity portrait placeholder"
                         fill
                         className="object-cover opacity-90"
@@ -1480,7 +1473,7 @@ export default function Home() {
         <RevealSection
           id="testimonials"
           title="// VERIFIED TESTIMONIALS"
-          subtitle="Signals of trust (placeholder for future real references)"
+          subtitle="Signals of trust"
           className="py-16"
         >
           <Testimonials />
@@ -1832,10 +1825,10 @@ function ContactSection() {
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[var(--muted)]">Email</span>
                 <a
-                  href="mailto:rupeshkthakur.com"
+                  href="mailto:rupeshkthakur443@gmail.com"
                   className="text-[var(--text)] underline decoration-[color-mix(in_srgb,var(--accent)_55%,transparent)] underline-offset-4 focus-ring rounded-md px-1 py-0.5"
                 >
-                  rupeshkthakur.com
+                  rupeshkthakur443@gmail.com
                 </a>
               </div>
             </div>
@@ -1858,31 +1851,49 @@ function ContactSection() {
             </div>
           </div>
 
-          <div className="glass rounded-2xl p-6">
-            <p className="mb-3 font-mono text-xs tracking-[0.24em] text-[var(--muted)]">
-              QUICK LINKS
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { label: "GitHub", icon: <Github className="h-4 w-4" /> },
-                { label: "LinkedIn", icon: <Linkedin className="h-4 w-4" /> },
-                { label: "Email", icon: <Mail className="h-4 w-4" /> },
-              ].map((s) => (
-                <a
-                  key={s.label}
-                  href="#"
-                  onClick={(e) => e.preventDefault()}
-                  className="glass inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-[var(--muted)] transition hover:text-[var(--text)] hover:neon focus-ring"
-                  aria-label={`${s.label} (placeholder)`}
-                >
-                  {s.icon}
-                  {s.label}
-                </a>
-              ))}
-            </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              {
+                label: "GitHub",
+                href: "https://github.com/IAZENT",
+                icon: <Github className="h-4 w-4" />,
+              },
+              {
+                label: "LinkedIn",
+                href: "https://www.linkedin.com/in/rupesh-thakur-aa98702a7/",
+                icon: <Linkedin className="h-4 w-4" />,
+              },
+              {
+                label: "Email",
+                href: "mailto:rupeshthakur443@gmail.com",
+                icon: <Mail className="h-4 w-4" />,
+              },
+              {
+                label: "TryHackMe",
+                href: "https://tryhackme.com/p/Cosmic777",
+                icon: <Skull className="h-4 w-4" />,
+              },
+              {
+                label: "Hack The Box",
+                href: "https://app.hackthebox.com/users/1936521",
+                icon: <Shield className="h-4 w-4" />,
+              },
+            ].map((s) => (
+              <a
+                key={s.label}
+                href={s.href}
+                onClick={(e) => e.preventDefault()}
+                className="glass inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-[var(--muted)] transition hover:text-[var(--text)] hover:neon focus-ring"
+                aria-label={s.label}
+              >
+                {s.icon}
+                {s.label}
+              </a>
+            ))}
+          </div>
+
           </div>
         </div>
       </div>
-    </div>
   );
 }
