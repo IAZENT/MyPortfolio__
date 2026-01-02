@@ -97,8 +97,15 @@ export default function AdminLoginPage() {
       }
 
       if (!serverOk) {
-        setErrorMsg("Could not persist login — server did not recognize the session.");
-        return;
+        // fallback to a full navigation so the browser will include Set-Cookie headers
+        // (more robust across browsers/environment than relying on immediate polling)
+        try {
+          window.location.replace("/rt-admin-cosmic");
+          return;
+        } catch (e) {
+          setErrorMsg("Could not persist login — server did not recognize the session.");
+          return;
+        }
       }
 
       router.replace("/rt-admin-cosmic");

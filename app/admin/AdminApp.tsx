@@ -1152,7 +1152,7 @@ function CertsAdmin({ supabase }: { supabase: ReturnType<typeof createBrowserSup
       prestige: Number.isFinite(form.prestige) ? form.prestige : 50,
     };
 
-    if (!payload.name.trim()) {
+    if (!payload.name || !payload.name.trim()) {
       setError("Name is required.");
       return;
     }
@@ -1368,7 +1368,7 @@ function SkillsAdmin({ supabase }: { supabase: ReturnType<typeof createBrowserSu
       years: form.years ?? null,
     };
 
-    if (!payload.name.trim()) {
+    if (!payload.name || !payload.name.trim()) {
       setError("Name is required.");
       return;
     }
@@ -1578,7 +1578,7 @@ function ServicesAdmin({ supabase }: { supabase: ReturnType<typeof createBrowser
       sort_order: Number.isFinite(form.sort_order) ? Number(form.sort_order) : 0,
     };
 
-    if (!payload.name.trim()) {
+    if (!payload.name || !payload.name.trim()) {
       setError("Name is required.");
       return;
     }
@@ -1791,7 +1791,7 @@ function TestimonialsAdmin({ supabase }: { supabase: ReturnType<typeof createBro
       rating: Math.max(1, Math.min(5, Number(form.rating ?? 5))),
     };
 
-    if (!payload.client_name.trim() || !payload.quote.trim()) {
+    if (!payload.client_name || !payload.client_name.trim() || !payload.quote || !payload.quote.trim()) {
       setError("Client name and quote are required.");
       return;
     }

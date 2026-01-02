@@ -54,8 +54,8 @@ export async function POST(req: Request) {
   const firstLine =
     text
       .split("\n")
-      .map((s) => s.trim())
-      .find((s) => s.length > 6) ?? null;
+      .map((s: string) => s.trim())
+      .find((s: string) => s.length > 6) ?? null;
 
   return NextResponse.json({
     ok: true,

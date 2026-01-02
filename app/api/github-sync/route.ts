@@ -150,7 +150,7 @@ export async function POST() {
   const results: { blog: number; projects: number } = { blog: 0, projects: 0 };
 
   if (blogDb) {
-    const pages = await notion.databases.query({ database_id: blogDb, page_size: 50 });
+    const pages = await (notion.databases as any).query({ database_id: blogDb, page_size: 50 });
     const inserts: BlogInsert[] = [];
 
     for (const r of pages.results) {
@@ -191,14 +191,14 @@ export async function POST() {
     }
 
     if (inserts.length) {
-      const { error } = await supabase.from("blog_posts").upsert(inserts, { onConflict: "slug" });
+      const { error } = await (supabase.from("blog_posts") as any).upsert(inserts as any, { onConflict: "slug" });
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
       results.blog = inserts.length;
     }
   }
 
   if (projectsDb) {
-    const pages = await notion.databases.query({ database_id: projectsDb, page_size: 50 });
+    const pages = await (notion.databases as any).query({ database_id: projectsDb, page_size: 50 });
     const inserts: ProjectInsert[] = [];
 
     for (const r of pages.results) {
@@ -234,7 +234,7 @@ export async function POST() {
     }
 
     if (inserts.length) {
-      const { error } = await supabase.from("projects").upsert(inserts, { onConflict: "slug" });
+      const { error } = await (supabase.from("projects") as any).upsert(inserts as any, { onConflict: "slug" });
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
       results.projects = inserts.length;
     }
