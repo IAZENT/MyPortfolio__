@@ -2,7 +2,14 @@
 
 // ... existing code ...
 import Image from "next/image";
-import { motion, useInView, useReducedMotion, useScroll, useSpring } from "framer-motion";
+import {
+  motion,
+  useInView,
+  useMotionValue,
+  useReducedMotion,
+  useScroll,
+  useSpring,
+} from "framer-motion";
 import {
   ArrowDown,
   ArrowRight,
@@ -120,6 +127,12 @@ function useActiveSection(): { active: SectionDef["id"]; setActive: (id: Section
 function scrollToId(id: string) {
   const el = document.getElementById(id);
   if (!el) return;
+
+  // keep URL in sync (fixes "page switching" feel + allows sharing anchors)
+  if (typeof window !== "undefined") {
+    window.history.pushState(null, "", `#${id}`);
+  }
+
   el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -191,7 +204,6 @@ function CyberBackground() {
     let w = 0;
     let h = 0;
 
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*+-/<>[]{}";
     const fontSize = 16;
 
     type Particle = { x: number; y: number; vx: number; vy: number; r: number };
@@ -219,11 +231,6 @@ function CyberBackground() {
     resize();
     window.addEventListener("resize", resize);
 
-    // Matrix columns
-    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    const columns = Math.floor((window.innerWidth * dpr) / fontSize);
-    const drops = new Array<number>(columns).fill(0).map(() => Math.random() * (window.innerHeight / fontSize));
-
     const step = () => {
       raf = requestAnimationFrame(step);
 
@@ -231,8 +238,9 @@ function CyberBackground() {
       ctx.fillStyle = "rgba(0,0,0,0.22)";
       ctx.fillRect(0, 0, w, h);
 
-      // particles + connections
-      const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#ef4444";
+      // particles + connections (matrix rain removed)
+      const accent =
+        getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#ef4444";
       ctx.save();
       ctx.globalAlpha = 0.75;
       ctx.fillStyle = accent;
@@ -254,6 +262,7 @@ function CyberBackground() {
       ctx.strokeStyle = accent;
       ctx.lineWidth = 1;
 
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
       for (let i = 0; i < particles.length; i++) {
         for (let j = i + 1; j < particles.length; j++) {
           const a = particles[i]!;
@@ -269,25 +278,6 @@ function CyberBackground() {
             ctx.stroke();
           }
         }
-      }
-      ctx.restore();
-
-      // matrix rain
-      ctx.save();
-      const success =
-        getComputedStyle(document.documentElement).getPropertyValue("--success").trim() || "#22c55e";
-      ctx.fillStyle = success;
-      ctx.font = `${fontSize * dpr}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`;
-      ctx.globalAlpha = 0.26;
-
-      for (let i = 0; i < drops.length; i++) {
-        const text = chars[Math.floor(Math.random() * chars.length)]!;
-        const x = i * fontSize * dpr;
-        const y = drops[i]! * fontSize * dpr;
-        ctx.fillText(text, x, y);
-
-        if (y > h && Math.random() > 0.985) drops[i] = 0;
-        drops[i] = (drops[i] ?? 0) + 0.58;
       }
       ctx.restore();
     };
@@ -313,9 +303,11 @@ function CustomCursor() {
   const reduce = useReducedMotion();
   const [enabled, setEnabled] = useState(false);
 
-  const pos = useRef({ x: 0, y: 0 });
-  const ring = useRef({ x: 0, y: 0 });
-  const raf = useRef<number | null>(null);
+  const x = useMotionValue(-100);
+  const y = useMotionValue(-100);
+
+  const ringX = useSpring(x, { stiffness: 420, damping: 38, mass: 0.6 });
+  const ringY = useSpring(y, { stiffness: 420, damping: 38, mass: 0.6 });
 
   useEffect(() => {
     if (reduce) return;
@@ -330,105 +322,33 @@ function CustomCursor() {
     if (!enabled) return;
 
     const onMove = (e: MouseEvent) => {
-      pos.current.x = e.clientX;
-      pos.current.y = e.clientY;
-    };
-
-    const tick = () => {
-      const lerp = 0.18;
-      ring.current.x += (pos.current.x - ring.current.x) * lerp;
-      ring.current.y += (pos.current.y - ring.current.y) * lerp;
-      raf.current = requestAnimationFrame(tick);
+      x.set(e.clientX);
+      y.set(e.clientY);
     };
 
     window.addEventListener("mousemove", onMove, { passive: true });
-    raf.current = requestAnimationFrame(tick);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      if (raf.current) cancelAnimationFrame(raf.current);
-    };
-  }, [enabled]);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [enabled, x, y]);
 
   if (!enabled) return null;
 
-  const styleDot: React.CSSProperties = {
-    transform: `translate3d(${pos.current.x - 4}px, ${pos.current.y - 4}px, 0)`,
-  };
-  const styleRing: React.CSSProperties = {
-    transform: `translate3d(${ring.current.x - 18}px, ${ring.current.y - 18}px, 0)`,
-  };
-
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-[60]">
-      <div
-        style={styleRing}
+      {/* ring */}
+      <motion.div
+        style={{ x: ringX, y: ringY, translateX: "-50%", translateY: "-50%" }}
         className="absolute h-9 w-9 rounded-full border border-[color-mix(in_srgb,var(--accent)_65%,transparent)] shadow-[0_0_24px_var(--glow)]"
       />
-      <div
-        style={styleDot}
+      {/* dot */}
+      <motion.div
+        style={{ x, y, translateX: "-50%", translateY: "-50%" }}
         className="absolute h-2 w-2 rounded-[2px] bg-[var(--accent)] shadow-[0_0_18px_var(--glow)]"
       />
-      <div
-        style={{
-          transform: `translate3d(${pos.current.x - 10}px, ${pos.current.y - 10}px, 0) rotate(45deg)`,
-        }}
+      {/* square */}
+      <motion.div
+        style={{ x, y, translateX: "-50%", translateY: "-50%", rotate: 45 }}
         className="absolute h-5 w-5 border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] opacity-80"
       />
-    </div>
-  );
-}
-
-function TerminalBoot() {
-  const reduce = useReducedMotion();
-  const [lines, setLines] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (reduce) {
-      setLines([
-        "> Authentication successful ✓",
-        "> Welcome to the Matrix.",
-      ]);
-      return;
-    }
-
-    const script = [
-      "> Initializing secure connection...",
-      "> Accessing portfolio database...",
-      "> Loading credentials...",
-      "> Authentication successful ✓",
-      "> Welcome to the Matrix.",
-    ];
-
-    let i = 0;
-    setLines([]);
-
-    const t = window.setInterval(() => {
-      setLines((prev) => [...prev, script[i]!]);
-      i += 1;
-      if (i >= script.length) window.clearInterval(t);
-    }, 520);
-
-    return () => window.clearInterval(t);
-  }, [reduce]);
-
-  return (
-    <div className="glass neon absolute left-4 top-4 hidden w-[320px] rounded-xl p-3 sm:block">
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-red-500/80" />
-          <span className="h-2.5 w-2.5 rounded-full bg-yellow-500/80" />
-          <span className="h-2.5 w-2.5 rounded-full bg-green-500/80" />
-        </div>
-        <div className="flex items-center gap-2 text-[11px] text-[var(--muted)]">
-          <Terminal className="h-3.5 w-3.5" />
-          <span className="font-mono">secure-shell</span>
-        </div>
-      </div>
-      <div className="space-y-1 font-mono text-xs leading-5 text-[var(--success)]">
-        {lines.map((l, idx) => (
-          <div key={idx}>{l}</div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -604,7 +524,7 @@ function TiltCard({
 
 export default function Home() {
   const { theme, cycle } = useTheme();
-  const { active } = useActiveSection();
+  const { active, setActive } = useActiveSection();
   const reduce = useReducedMotion();
 
   const roles = useMemo(
@@ -677,6 +597,7 @@ export default function Home() {
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[80] focus:rounded-lg focus:bg-[var(--bg1)] focus:px-3 focus:py-2 focus:text-sm focus-ring"
         onClick={(e) => {
           e.preventDefault();
+          setActive("home");
           scrollToId("home");
         }}
       >
@@ -700,7 +621,10 @@ export default function Home() {
             key={s.id}
             type="button"
             aria-label={`Jump to ${s.label}`}
-            onClick={() => scrollToId(s.id)}
+            onClick={() => {
+              setActive(s.id);
+              scrollToId(s.id);
+            }}
             className={[
               "h-2.5 w-2.5 rounded-full border transition",
               active === s.id
@@ -727,7 +651,10 @@ export default function Home() {
         >
           <button
             type="button"
-            onClick={() => scrollToId("home")}
+            onClick={() => {
+              setActive("home");
+              scrollToId("home");
+            }}
             className="group inline-flex items-center gap-2 rounded-lg px-2 py-1 focus-ring"
             aria-label="Back to top"
           >
@@ -746,10 +673,11 @@ export default function Home() {
                 href={`#${s.id}`}
                 onClick={(e) => {
                   e.preventDefault();
+                  setActive(s.id);
                   scrollToId(s.id);
                 }}
                 className={[
-                  "text-sm transition",
+                  "group text-sm transition", // <-- group added (fix underline hover)
                   active === s.id ? "text-[var(--text)]" : "text-[var(--muted)] hover:text-[var(--text)]",
                 ].join(" ")}
               >
@@ -787,8 +715,6 @@ export default function Home() {
       <main className="pt-16">
         {/* HERO */}
         <section id="home" className="relative overflow-hidden">
-          <TerminalBoot />
-
           <div className="mx-auto flex min-h-[92vh] max-w-6xl flex-col items-center justify-center px-4 pb-10 pt-20 sm:px-6">
             <motion.div
               initial={reduce ? { opacity: 1, y: 0 } : { opacity: 0, y: 18 }}
@@ -796,19 +722,14 @@ export default function Home() {
               transition={{ duration: 0.9, ease: [0.2, 0.8, 0.2, 1] }}
               className="text-center"
             >
-              {/* corner brackets */}
-              <div aria-hidden className="relative mx-auto mb-8 h-10 w-10 opacity-90">
-                <div className="absolute left-0 top-0 h-3 w-3 border-l-2 border-t-2 border-[var(--accent)]" />
-                <div className="absolute right-0 top-0 h-3 w-3 border-r-2 border-t-2 border-[var(--accent)]" />
-                <div className="absolute bottom-0 left-0 h-3 w-3 border-b-2 border-l-2 border-[var(--accent)]" />
-                <div className="absolute bottom-0 right-0 h-3 w-3 border-b-2 border-r-2 border-[var(--accent)]" />
-              </div>
-
               <GlitchName name="Rupesh Thakur" />
 
               <div className="mx-auto mt-4 max-w-3xl font-mono text-sm text-[var(--muted)] sm:text-base">
                 <span className="text-[var(--success)]">{typed}</span>
-                <span aria-hidden className="ml-1 inline-block h-4 w-[10px] translate-y-[2px] bg-[var(--success)] opacity-70 animate-pulse" />
+                <span
+                  aria-hidden
+                  className="ml-1 inline-block h-4 w-[10px] translate-y-[2px] bg-[var(--success)] opacity-70 animate-pulse"
+                />
               </div>
             </motion.div>
 
@@ -903,7 +824,10 @@ export default function Home() {
             {/* scroll indicator */}
             <button
               type="button"
-              onClick={() => scrollToId("about")}
+              onClick={() => {
+                setActive("about");
+                scrollToId("about");
+              }}
               className="mt-14 inline-flex flex-col items-center gap-2 text-xs tracking-[0.22em] text-[var(--muted)] focus-ring"
               aria-label="Scroll to explore"
             >
@@ -973,67 +897,66 @@ export default function Home() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-              <a
-              href="/about"
-              onClick={(e) => e.preventDefault()}
-              className="inline-flex items-center gap-2 rounded-xl bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-4 py-2 text-sm text-[var(--text)] transition hover:shadow-[0_0_20px_var(--glow)] focus-ring"
-              aria-label="Read full story (placeholder)"
-              >
-              Read My Full Story <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-              </a>
+                <a
+                  href="/about"
+                  onClick={(e) => e.preventDefault()}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-4 py-2 text-sm text-[var(--text)] transition hover:shadow-[0_0_20px_var(--glow)] focus-ring"
+                  aria-label="Read full story (placeholder)"
+                >
+                  Read My Full Story <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
+                </a>
 
-              <div className="flex items-center gap-2">
-              {/* GitHub */}
-              <a
-              className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
-              href="https://github.com/IAZENT"
-              onClick={(e) => e.preventDefault()}
-              aria-label="GitHub"
-              >
-              <Github className="h-4 w-4 text-[var(--muted)]" />
-              </a>
+                <div className="flex items-center gap-2">
+                  {/* GitHub */}
+                  <a
+                    className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
+                    href="https://github.com/IAZENT"
+                    onClick={(e) => e.preventDefault()}
+                    aria-label="GitHub"
+                  >
+                    <Github className="h-4 w-4 text-[var(--muted)]" />
+                  </a>
 
-              {/* LinkedIn */}
-              <a
-              className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
-              href="https://www.linkedin.com/in/rupesh-thakur-aa98702a7/"
-              onClick={(e) => e.preventDefault()}
-              aria-label="LinkedIn"
-              >
-              <Linkedin className="h-4 w-4 text-[var(--muted)]" />
-              </a>
+                  {/* LinkedIn */}
+                  <a
+                    className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
+                    href="https://www.linkedin.com/in/rupesh-thakur-aa98702a7/"
+                    onClick={(e) => e.preventDefault()}
+                    aria-label="LinkedIn"
+                  >
+                    <Linkedin className="h-4 w-4 text-[var(--muted)]" />
+                  </a>
 
-              {/* Email */}
-              <a
-              className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
-              href="mailto:rupeshthakur443@gmail.com"
-              onClick={(e) => e.preventDefault()}
-              aria-label="Email"
-              >
-              <Mail className="h-4 w-4 text-[var(--muted)]" />
-              </a>
+                  {/* Email */}
+                  <a
+                    className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
+                    href="mailto:rupeshthakur443@gmail.com"
+                    onClick={(e) => e.preventDefault()}
+                    aria-label="Email"
+                  >
+                    <Mail className="h-4 w-4 text-[var(--muted)]" />
+                  </a>
 
-              {/* TryHackMe */}
-              <a
-              className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
-              href="https://tryhackme.com/p/Cosmic777"
-              onClick={(e) => e.preventDefault()}
-              aria-label="TryHackMe"
-              >
-              <Skull className="h-4 w-4 text-[var(--muted)]" />
-              </a>
+                  {/* TryHackMe */}
+                  <a
+                    className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
+                    href="https://tryhackme.com/p/Cosmic777"
+                    onClick={(e) => e.preventDefault()}
+                    aria-label="TryHackMe"
+                  >
+                    <Skull className="h-4 w-4 text-[var(--muted)]" />
+                  </a>
 
-              {/* Hack The Box */}
-              <a
-              className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
-              href="https://app.hackthebox.com/users/1936521"
-              onClick={(e) => e.preventDefault()}
-              aria-label="Hack The Box"
-              >
-              <Shield className="h-4 w-4 text-[var(--muted)]" />
-              </a>
-              </div>
-
+                  {/* Hack The Box */}
+                  <a
+                    className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
+                    href="https://app.hackthebox.com/users/1936521"
+                    onClick={(e) => e.preventDefault()}
+                    aria-label="Hack The Box"
+                  >
+                    <Shield className="h-4 w-4 text-[var(--muted)]" />
+                  </a>
+                </div>
               </div>
             </div>
 
@@ -1516,6 +1439,7 @@ export default function Home() {
                       href={`#${s.id}`}
                       onClick={(e) => {
                         e.preventDefault();
+                        setActive(s.id);
                         scrollToId(s.id);
                       }}
                       className="transition hover:text-[var(--text)] focus-ring rounded-md px-1 py-0.5 inline-block"
@@ -1584,10 +1508,13 @@ export default function Home() {
 
           <div className="border-t border-[color-mix(in_srgb,var(--border)_70%,transparent)]">
             <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-4 text-xs text-[var(--muted)] sm:flex-row sm:px-6">
-              <span>© 2025 Rupesh Thakur. All rights reserved.</span>
+              <span>© 2026 Rupesh Thakur. All rights reserved.</span>
               <button
                 type="button"
-                onClick={() => scrollToId("home")}
+                onClick={() => {
+                  setActive("home");
+                  scrollToId("home");
+                }}
                 className="inline-flex items-center gap-2 rounded-lg px-2 py-1 transition hover:text-[var(--text)] focus-ring"
                 aria-label="Back to top"
               >
@@ -1891,9 +1818,8 @@ function ContactSection() {
               </a>
             ))}
           </div>
-
-          </div>
         </div>
       </div>
+    </div>
   );
 }
