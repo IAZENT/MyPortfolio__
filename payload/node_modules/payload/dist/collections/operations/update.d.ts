@@ -1,0 +1,20 @@
+import { Config as GeneratedTypes } from 'payload/generated-types';
+import { DeepPartial } from 'ts-essentials';
+import { Where } from '../../types';
+import { BulkOperationResult, Collection } from '../config/types';
+import { PayloadRequest } from '../../express/types';
+import { CreateUpdateType } from './create';
+export type Arguments<T extends CreateUpdateType> = {
+    collection: Collection;
+    req: PayloadRequest;
+    where: Where;
+    data: DeepPartial<T>;
+    depth?: number;
+    disableVerificationEmail?: boolean;
+    overrideAccess?: boolean;
+    showHiddenFields?: boolean;
+    overwriteExistingFiles?: boolean;
+    draft?: boolean;
+};
+declare function update<TSlug extends keyof GeneratedTypes['collections']>(incomingArgs: Arguments<GeneratedTypes['collections'][TSlug]>): Promise<BulkOperationResult<TSlug>>;
+export default update;

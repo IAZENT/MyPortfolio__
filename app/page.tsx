@@ -2,6 +2,7 @@
 
 // ... existing code ...
 import Image from "next/image";
+import Link from "next/link";
 import {
   motion,
   useInView,
@@ -28,7 +29,7 @@ import {
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-type ThemeId = "red" | "matrix" | "purple" | "blue" | "light";
+type ThemeId = "red" | "matrix" | "purple" | "blue" | "amber";
 
 type SectionDef = {
   id:
@@ -63,7 +64,7 @@ const THEMES: { id: ThemeId; label: string; className: string; icon: React.React
   { id: "matrix", label: "Matrix Green", className: "theme-matrix", icon: <Terminal className="h-4 w-4" /> },
   { id: "purple", label: "Cyberpunk Purple", className: "theme-purple", icon: <Moon className="h-4 w-4" /> },
   { id: "blue", label: "Professional Blue", className: "theme-blue", icon: <Moon className="h-4 w-4" /> },
-  { id: "light", label: "Minimal White", className: "theme-light", icon: <Sun className="h-4 w-4" /> },
+  { id: "amber", label: "Amber Ops", className: "theme-amber", icon: <Sun className="h-4 w-4" /> },
 ];
 
 function clamp(n: number, min: number, max: number) {
@@ -80,13 +81,13 @@ function useTheme(): { theme: ThemeId; cycle: () => void } {
 
   useEffect(() => {
     const html = document.documentElement;
-    html.classList.remove("theme-matrix", "theme-purple", "theme-blue", "theme-light");
+    html.classList.remove("theme-matrix", "theme-purple", "theme-blue", "theme-amber");
     const match = THEMES.find((t) => t.id === theme);
     if (match?.className) html.classList.add(match.className);
     window.localStorage.setItem("theme", theme);
 
-    // color-scheme hint
-    html.style.colorScheme = theme === "light" ? "light" : "dark";
+    // color-scheme hint (all themes are dark now)
+    html.style.colorScheme = "dark";
   }, [theme]);
 
   const cycle = () => {
@@ -102,19 +103,65 @@ function useTheme(): { theme: ThemeId; cycle: () => void } {
 function useActiveSection(): { active: SectionDef["id"]; setActive: (id: SectionDef["id"]) => void } {
   const [active, setActive] = useState<SectionDef["id"]>("home");
 
+  // Sync initial state with URL hash (and keep in sync on back/forward + manual hash changes)
+  useEffect(() => {
+    const syncFromHash = () => {
+      const raw = (window.location.hash || "").replace("#", "");
+      const match = SECTIONS.find((s) => s.id === raw)?.id;
+      if (match) setActive(match);
+    };
+
+    syncFromHash();
+    window.addEventListener("hashchange", syncFromHash);
+    window.addEventListener("popstate", syncFromHash);
+    return () => {
+      window.removeEventListener("hashchange", syncFromHash);
+      window.removeEventListener("popstate", syncFromHash);
+    };
+  }, []);
+
   useEffect(() => {
     const els = SECTIONS.map((s) => document.getElementById(s.id)).filter(
       (el): el is HTMLElement => Boolean(el)
     );
 
+    // Track entries so we can pick the section closest to the top (prevents "wrong underline" when multiple intersect)
+    const latest = new Map<SectionDef["id"], IntersectionObserverEntry>();
+
+    const pickBest = () => {
+      const navOffset = 96; // approximate fixed header + spacing
+      const candidates = Array.from(latest.entries())
+        .filter(([, e]) => e.isIntersecting)
+        .map(([id, e]) => {
+          const top = e.boundingClientRect.top;
+          const dist = Math.abs(top - navOffset);
+          const ratio = e.intersectionRatio ?? 0;
+          return { id, dist, ratio };
+        });
+
+      if (candidates.length === 0) return;
+
+      // Prefer closest-to-top; break ties by higher intersection ratio
+      candidates.sort((a, b) => a.dist - b.dist || b.ratio - a.ratio);
+      setActive(candidates[0]!.id);
+    };
+
     const observer = new IntersectionObserver(
       (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => (b.intersectionRatio ?? 0) - (a.intersectionRatio ?? 0))[0];
-        if (visible?.target?.id) setActive(visible.target.id as SectionDef["id"]);
+        for (const e of entries) {
+          const id = e.target.id as SectionDef["id"];
+          if (SECTIONS.some((s) => s.id === id)) {
+            latest.set(id, e);
+          }
+        }
+        pickBest();
       },
-      { root: null, threshold: [0.15, 0.25, 0.4, 0.6] }
+      {
+        root: null,
+        threshold: [0, 0.1, 0.2, 0.35, 0.5, 0.65],
+        // This makes "current section" more stable around the top of the viewport
+        rootMargin: "-15% 0px -65% 0px",
+      }
     );
 
     els.forEach((el) => observer.observe(el));
@@ -169,13 +216,20 @@ function RevealSection({
           {title && (
             <div className="mb-2 flex items-center gap-3">
               <div className="h-px w-10 bg-[var(--accent)]" />
-              <p className="font-mono text-xs tracking-[0.28em] text-[var(--muted)]">
+              <p
+                className="font-mono text-xs tracking-[0.28em] text-[color:color-mix(in_srgb,var(--accent)_70%,var(--muted))]"
+              >
                 {title}
               </p>
             </div>
           )}
           {subtitle && (
-            <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-4xl">
+            <h2
+              className={[
+                "text-balance text-2xl font-semibold tracking-tight sm:text-4xl",
+                "bg-[linear-gradient(90deg,var(--text),color-mix(in_srgb,var(--accent)_55%,var(--text)))] bg-clip-text text-transparent",
+              ].join(" ")}
+            >
               {subtitle}
             </h2>
           )}
@@ -821,26 +875,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* scroll indicator */}
-            <button
-              type="button"
-              onClick={() => {
-                setActive("about");
-                scrollToId("about");
-              }}
-              className="mt-14 inline-flex flex-col items-center gap-2 text-xs tracking-[0.22em] text-[var(--muted)] focus-ring"
-              aria-label="Scroll to explore"
-            >
-              <span>SCROLL TO EXPLORE</span>
-              <motion.div
-                aria-hidden
-                animate={reduce ? undefined : { y: [0, 6, 0] }}
-                transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
-                className="grid h-10 w-7 place-items-center rounded-full border border-[color-mix(in_srgb,var(--border)_70%,transparent)]"
-              >
-                <ArrowDown className="h-4 w-4 text-[var(--accent)]" />
-              </motion.div>
-            </button>
+            {/* scroll indicator removed */}
           </div>
         </section>
 
@@ -897,21 +932,21 @@ export default function Home() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <a
+                <Link
                   href="/about"
-                  onClick={(e) => e.preventDefault()}
                   className="inline-flex items-center gap-2 rounded-xl bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-4 py-2 text-sm text-[var(--text)] transition hover:shadow-[0_0_20px_var(--glow)] focus-ring"
-                  aria-label="Read full story (placeholder)"
+                  aria-label="Read full story"
                 >
                   Read My Full Story <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-                </a>
+                </Link>
 
                 <div className="flex items-center gap-2">
                   {/* GitHub */}
                   <a
                     className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
                     href="https://github.com/IAZENT"
-                    onClick={(e) => e.preventDefault()}
+                    target="_blank"
+                    rel="noreferrer"
                     aria-label="GitHub"
                   >
                     <Github className="h-4 w-4 text-[var(--muted)]" />
@@ -921,7 +956,8 @@ export default function Home() {
                   <a
                     className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
                     href="https://www.linkedin.com/in/rupesh-thakur-aa98702a7/"
-                    onClick={(e) => e.preventDefault()}
+                    target="_blank"
+                    rel="noreferrer"
                     aria-label="LinkedIn"
                   >
                     <Linkedin className="h-4 w-4 text-[var(--muted)]" />
@@ -931,7 +967,6 @@ export default function Home() {
                   <a
                     className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
                     href="mailto:rupeshthakur443@gmail.com"
-                    onClick={(e) => e.preventDefault()}
                     aria-label="Email"
                   >
                     <Mail className="h-4 w-4 text-[var(--muted)]" />
@@ -941,7 +976,8 @@ export default function Home() {
                   <a
                     className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
                     href="https://tryhackme.com/p/Cosmic777"
-                    onClick={(e) => e.preventDefault()}
+                    target="_blank"
+                    rel="noreferrer"
                     aria-label="TryHackMe"
                   >
                     <Skull className="h-4 w-4 text-[var(--muted)]" />
@@ -951,7 +987,8 @@ export default function Home() {
                   <a
                     className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
                     href="https://app.hackthebox.com/users/1936521"
-                    onClick={(e) => e.preventDefault()}
+                    target="_blank"
+                    rel="noreferrer"
                     aria-label="Hack The Box"
                   >
                     <Shield className="h-4 w-4 text-[var(--muted)]" />
@@ -1033,14 +1070,13 @@ export default function Home() {
             </div>
 
             <div className="mt-8 flex justify-center">
-              <a
+              <Link
                 href="/skills"
-                onClick={(e) => e.preventDefault()}
                 className="inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] px-4 py-2 text-sm text-[var(--text)] transition hover:shadow-[0_0_20px_var(--glow)] focus-ring"
-                aria-label="View full skills (placeholder)"
+                aria-label="View full skills"
               >
                 View Full Arsenal <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-              </a>
+              </Link>
             </div>
           </div>
         </RevealSection>
@@ -1142,14 +1178,13 @@ export default function Home() {
             </div>
 
             <div className="mt-8 flex justify-center">
-              <a
+              <Link
                 href="/projects"
-                onClick={(e) => e.preventDefault()}
                 className="inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] px-4 py-2 text-sm text-[var(--text)] transition hover:shadow-[0_0_20px_var(--glow)] focus-ring"
-                aria-label="View all projects (placeholder)"
+                aria-label="View all projects"
               >
                 View All Projects <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-              </a>
+              </Link>
             </div>
           </div>
         </RevealSection>
@@ -1194,28 +1229,26 @@ export default function Home() {
 
                   <div className="mt-4 flex items-center justify-between text-xs text-[var(--muted)]">
                     <span>Reading time: {b.time}</span>
-                    <a
+                    <Link
                       href="/blog"
-                      onClick={(e) => e.preventDefault()}
                       className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-[var(--text)] transition hover:shadow-[0_0_18px_var(--glow)] focus-ring"
-                      aria-label={`Read ${b.rep} (placeholder)`}
+                      aria-label={`Read ${b.rep}`}
                     >
                       Read <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-                    </a>
+                    </Link>
                   </div>
                 </TiltCard>
               ))}
             </div>
 
             <div className="mt-8 flex justify-center">
-              <a
+              <Link
                 href="/blog"
-                onClick={(e) => e.preventDefault()}
                 className="inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] px-4 py-2 text-sm text-[var(--text)] transition hover:shadow-[0_0_20px_var(--glow)] focus-ring"
-                aria-label="View all posts (placeholder)"
+                aria-label="View all reports"
               >
                 View All Reports <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-              </a>
+              </Link>
             </div>
           </div>
         </RevealSection>
@@ -1268,14 +1301,13 @@ export default function Home() {
             </div>
 
             <div className="mt-8 flex justify-center">
-              <a
+              <Link
                 href="/certifications"
-                onClick={(e) => e.preventDefault()}
                 className="inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] px-4 py-2 text-sm text-[var(--text)] transition hover:shadow-[0_0_20px_var(--glow)] focus-ring"
-                aria-label="View all achievements (placeholder)"
+                aria-label="View all achievements"
               >
                 View All Achievements <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-              </a>
+              </Link>
             </div>
           </div>
         </RevealSection>
@@ -1323,14 +1355,13 @@ export default function Home() {
                     ))}
                   </ul>
 
-                  <a
+                  <Link
                     href="/services"
-                    onClick={(e) => e.preventDefault()}
                     className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-3 py-2 text-xs text-[var(--text)] transition hover:shadow-[0_0_18px_var(--glow)] focus-ring"
-                    aria-label="Learn more (placeholder)"
+                    aria-label="Learn more"
                   >
                     Learn More <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-                  </a>
+                  </Link>
                 </TiltCard>
               ))}
             </div>
@@ -1374,14 +1405,13 @@ export default function Home() {
                   </div>
 
                   <div className="mt-5 flex flex-wrap gap-3">
-                    <a
+                    <Link
                       href="/vault"
-                      onClick={(e) => e.preventDefault()}
                       className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-black transition hover:shadow-[0_0_22px_var(--glow)] focus-ring"
-                      aria-label="Enter the vault (placeholder)"
+                      aria-label="Enter the vault"
                     >
                       Enter The Vault <ArrowRight className="h-4 w-4" />
-                    </a>
+                    </Link>
                     <span className="inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--accent)_50%,transparent)] px-4 py-2 text-sm text-[var(--muted)]">
                       Hint: ↑↑↓↓←→←→BA
                     </span>
@@ -1406,7 +1436,7 @@ export default function Home() {
         <RevealSection
           id="contact"
           title="// ESTABLISH CONNECTION"
-          subtitle="Let's connect for internships, research opportunities, and security projects"
+          subtitle="If you'd like to reach me, please email me directly"
           className="py-16"
         >
           <ContactSection />
@@ -1414,7 +1444,7 @@ export default function Home() {
 
         {/* FOOTER */}
         <footer className="border-t border-[color-mix(in_srgb,var(--border)_70%,transparent)] bg-[color-mix(in_srgb,var(--bg1)_85%,transparent)]">
-          <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 py-12 sm:px-6 md:grid-cols-4">
+          <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 py-12 sm:px-6 md:grid-cols-3">
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <span className="grid h-9 w-9 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--accent)_14%,transparent)]">
@@ -1432,7 +1462,7 @@ export default function Home() {
 
             <div>
               <p className="mb-3 text-sm font-semibold">Quick Links</p>
-              <ul className="space-y-2 text-sm text-[var(--muted)]">
+              <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-[var(--muted)]">
                 {SECTIONS.map((s) => (
                   <li key={s.id}>
                     <a
@@ -1442,7 +1472,7 @@ export default function Home() {
                         setActive(s.id);
                         scrollToId(s.id);
                       }}
-                      className="transition hover:text-[var(--text)] focus-ring rounded-md px-1 py-0.5 inline-block"
+                      className="inline-flex w-full items-center justify-center rounded-lg px-2 py-1 text-center transition hover:text-[var(--text)] hover:neon focus-ring"
                     >
                       {s.label}
                     </a>
@@ -1453,13 +1483,13 @@ export default function Home() {
 
             <div>
               <p className="mb-3 text-sm font-semibold">Resources</p>
-              <ul className="space-y-2 text-sm text-[var(--muted)]">
+              <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-[var(--muted)]">
                 {["Security Blog", "CTF Writeups", "Case Studies", "Privacy Policy"].map((l) => (
                   <li key={l}>
                     <a
                       href="#"
                       onClick={(e) => e.preventDefault()}
-                      className="transition hover:text-[var(--text)] focus-ring rounded-md px-1 py-0.5 inline-block"
+                      className="inline-flex w-full items-center justify-center rounded-lg px-2 py-1 text-center transition hover:text-[var(--text)] hover:neon focus-ring"
                       aria-label={`${l} (placeholder)`}
                     >
                       {l}
@@ -1467,42 +1497,6 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-            </div>
-
-            <div>
-              <p className="mb-3 text-sm font-semibold">Connect & Subscribe</p>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
-                  <Mail className="h-4 w-4 text-[var(--accent)]" />
-                  <span>security@rupeshkthakur.com</span>
-                </div>
-
-                <form
-                  onSubmit={(e) => e.preventDefault()}
-                  className="glass rounded-2xl p-3"
-                  aria-label="Newsletter signup (placeholder)"
-                >
-                  <label className="sr-only" htmlFor="newsletterEmail">
-                    Email
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      id="newsletterEmail"
-                      type="email"
-                      required
-                      placeholder="Email address"
-                      className="w-full rounded-xl border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-transparent px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus-ring"
-                    />
-                    <button
-                      type="submit"
-                      className="neon rounded-xl bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-black focus-ring"
-                    >
-                      Subscribe
-                    </button>
-                  </div>
-                  <p className="mt-2 text-xs text-[var(--muted)]">Get security tips weekly.</p>
-                </form>
-              </div>
             </div>
           </div>
 
@@ -1613,14 +1607,13 @@ function Testimonials() {
         </motion.div>
 
         <div className="mt-5 flex justify-center">
-          <a
+          <Link
             href="/services"
-            onClick={(e) => e.preventDefault()}
             className="inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] px-4 py-2 text-sm text-[var(--text)] transition hover:shadow-[0_0_20px_var(--glow)] focus-ring"
-            aria-label="View all testimonials (placeholder)"
+            aria-label="View all testimonials"
           >
             View All <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-          </a>
+          </Link>
         </div>
       </div>
     </div>
@@ -1628,196 +1621,102 @@ function Testimonials() {
 }
 
 function ContactSection() {
-  const [sent, setSent] = useState(false);
-
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6">
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="space-y-4">
         <div className="glass neon rounded-2xl p-6">
-          <p className="mb-4 font-mono text-xs tracking-[0.24em] text-[var(--muted)]">
-            SEND MESSAGE (UI ONLY)
+          <p className="mb-3 font-mono text-xs tracking-[0.24em] text-[var(--muted)]">
+            CONTACT INFO
           </p>
 
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setSent(true);
-              window.setTimeout(() => setSent(false), 2200);
-            }}
-            className="space-y-4"
-          >
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="text-xs text-[var(--muted)]" htmlFor="name">
-                  Name
-                </label>
-                <input
-                  id="name"
-                  required
-                  className="mt-1 w-full rounded-xl border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-transparent px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus-ring"
-                  placeholder="Your name"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-[var(--muted)]" htmlFor="email">
-                  Email
-                </label>
-                <input
-                  id="email"
-                  required
-                  type="email"
-                  className="mt-1 w-full rounded-xl border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-transparent px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus-ring"
-                  placeholder="you@example.com"
-                />
-              </div>
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[var(--muted)]">Availability</span>
+              <span className="text-[var(--success)]">● Open</span>
             </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]" htmlFor="subject">
-                Subject
-              </label>
-              <select
-                id="subject"
-                className="mt-1 w-full rounded-xl border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-transparent px-3 py-2 text-sm text-[var(--text)] focus-ring"
-                defaultValue="General Inquiry"
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[var(--muted)]">Location</span>
+              <span className="text-[var(--text)]">Nepal (Remote-friendly)</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[var(--muted)]">Response time</span>
+              <span className="text-[var(--text)]">24–48 hours</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[var(--muted)]">Email</span>
+              <a
+                href="mailto:rupeshkthakur443@gmail.com"
+                className="text-[var(--text)] underline decoration-[color-mix(in_srgb,var(--accent)_55%,transparent)] underline-offset-4 focus-ring rounded-md px-1 py-0.5"
               >
-                <option className="bg-black">General Inquiry</option>
-                <option className="bg-black">Internship / Research</option>
-                <option className="bg-black">Security Lab / Collaboration</option>
-                <option className="bg-black">Other</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--muted)]" htmlFor="message">
-                Message
-              </label>
-              <textarea
-                id="message"
-                required
-                minLength={50}
-                className="mt-1 min-h-[140px] w-full rounded-xl border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-transparent px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus-ring"
-                placeholder="Write at least 50 characters…"
-              />
-              <p className="mt-2 text-xs text-[var(--muted)]">
-                Tip: Share your goal + timeline + what you want me to review or build.
-              </p>
-            </div>
-
-            <label className="flex items-start gap-2 text-sm text-[var(--muted)]">
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4 rounded border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-transparent"
-              />
-              I'm interested in an internship / research discussion
-            </label>
-
-            <button
-              type="submit"
-              className="neon inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-black transition focus-ring"
-            >
-              Send Encrypted Message <ArrowRight className="h-4 w-4" />
-            </button>
-
-            <div aria-live="polite" className="min-h-6">
-              {sent && (
-                <div className="flex items-center gap-2 text-sm text-[var(--success)]">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>Message queued (UI demo). Backend comes in Step 2.</span>
-                </div>
-              )}
-            </div>
-          </form>
-        </div>
-
-        <div className="space-y-4">
-          <div className="glass neon rounded-2xl p-6">
-            <p className="mb-3 font-mono text-xs tracking-[0.24em] text-[var(--muted)]">
-              CONTACT INFO
-            </p>
-
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[var(--muted)]">Availability</span>
-                <span className="text-[var(--success)]">● Open</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[var(--muted)]">Location</span>
-                <span className="text-[var(--text)]">Nepal (Remote-friendly)</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[var(--muted)]">Response time</span>
-                <span className="text-[var(--text)]">24–48 hours</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[var(--muted)]">Email</span>
-                <a
-                  href="mailto:rupeshkthakur443@gmail.com"
-                  className="text-[var(--text)] underline decoration-[color-mix(in_srgb,var(--accent)_55%,transparent)] underline-offset-4 focus-ring rounded-md px-1 py-0.5"
-                >
-                  rupeshkthakur443@gmail.com
-                </a>
-              </div>
-            </div>
-
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              {[
-                { label: "PGP Key Available", icon: <Lock className="h-4 w-4 text-[var(--accent)]" /> },
-                { label: "Remote-friendly", icon: <Shield className="h-4 w-4 text-[var(--accent)]" /> },
-                { label: "NDA-ready (future)", icon: <CheckCircle2 className="h-4 w-4 text-[var(--accent)]" /> },
-                { label: "Lab collaborations", icon: <Terminal className="h-4 w-4 text-[var(--accent)]" /> },
-              ].map((c) => (
-                <div
-                  key={c.label}
-                  className="rounded-xl border border-[color-mix(in_srgb,var(--border)_75%,transparent)] bg-[color-mix(in_srgb,var(--bg1)_70%,transparent)] p-3"
-                >
-                  <div className="mb-2">{c.icon}</div>
-                  <p className="text-xs text-[var(--muted)]">{c.label}</p>
-                </div>
-              ))}
+                rupeshkthakur443@gmail.com
+              </a>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="mt-5 grid grid-cols-2 gap-3">
             {[
-              {
-                label: "GitHub",
-                href: "https://github.com/IAZENT",
-                icon: <Github className="h-4 w-4" />,
-              },
-              {
-                label: "LinkedIn",
-                href: "https://www.linkedin.com/in/rupesh-thakur-aa98702a7/",
-                icon: <Linkedin className="h-4 w-4" />,
-              },
-              {
-                label: "Email",
-                href: "mailto:rupeshthakur443@gmail.com",
-                icon: <Mail className="h-4 w-4" />,
-              },
-              {
-                label: "TryHackMe",
-                href: "https://tryhackme.com/p/Cosmic777",
-                icon: <Skull className="h-4 w-4" />,
-              },
-              {
-                label: "Hack The Box",
-                href: "https://app.hackthebox.com/users/1936521",
-                icon: <Shield className="h-4 w-4" />,
-              },
-            ].map((s) => (
-              <a
-                key={s.label}
-                href={s.href}
-                onClick={(e) => e.preventDefault()}
-                className="glass inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-[var(--muted)] transition hover:text-[var(--text)] hover:neon focus-ring"
-                aria-label={s.label}
+              { label: "PGP Key Available", icon: <Lock className="h-4 w-4 text-[var(--accent)]" /> },
+              { label: "Remote-friendly", icon: <Shield className="h-4 w-4 text-[var(--accent)]" /> },
+              { label: "NDA-ready (future)", icon: <CheckCircle2 className="h-4 w-4 text-[var(--accent)]" /> },
+              { label: "Lab collaborations", icon: <Terminal className="h-4 w-4 text-[var(--accent)]" /> },
+            ].map((c) => (
+              <div
+                key={c.label}
+                className="rounded-xl border border-[color-mix(in_srgb,var(--border)_75%,transparent)] bg-[color-mix(in_srgb,var(--bg1)_70%,transparent)] p-3"
               >
-                {s.icon}
-                {s.label}
-              </a>
+                <div className="mb-2">{c.icon}</div>
+                <p className="text-xs text-[var(--muted)]">{c.label}</p>
+              </div>
             ))}
           </div>
+
+          <div className="mt-5 rounded-xl border border-[color-mix(in_srgb,var(--border)_75%,transparent)] bg-[color-mix(in_srgb,var(--bg1)_70%,transparent)] p-4">
+            <p className="text-sm text-[var(--muted)]">
+              Please email me directly. I don&apos;t accept contact form messages via this site.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {[
+            {
+              label: "GitHub",
+              href: "https://github.com/IAZENT",
+              icon: <Github className="h-4 w-4" />,
+            },
+            {
+              label: "LinkedIn",
+              href: "https://www.linkedin.com/in/rupesh-thakur-aa98702a7/",
+              icon: <Linkedin className="h-4 w-4" />,
+            },
+            {
+              label: "Email",
+              href: "mailto:rupeshthakur443@gmail.com",
+              icon: <Mail className="h-4 w-4" />,
+            },
+            {
+              label: "TryHackMe",
+              href: "https://tryhackme.com/p/Cosmic777",
+              icon: <Skull className="h-4 w-4" />,
+            },
+            {
+              label: "Hack The Box",
+              href: "https://app.hackthebox.com/users/1936521",
+              icon: <Shield className="h-4 w-4" />,
+            },
+          ].map((s) => (
+            <a
+              key={s.label}
+              href={s.href}
+              target={s.href.startsWith("http") ? "_blank" : undefined}
+              rel={s.href.startsWith("http") ? "noreferrer" : undefined}
+              className="glass inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-[var(--muted)] transition hover:text-[var(--text)] hover:neon focus-ring"
+              aria-label={s.label}
+            >
+              {s.icon}
+              {s.label}
+            </a>
+          ))}
         </div>
       </div>
     </div>

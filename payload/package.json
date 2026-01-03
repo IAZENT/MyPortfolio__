@@ -1,0 +1,14 @@
+{
+  "name": "payload-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "payload dev --config ./payload.config.ts",
+    "build": "payload build --config ./payload.config.ts",
+    "start": "payload start --config ./payload.config.ts"
+  },
+  "dependencies": {
+    "payload": "^1.8.0",
+    "sharp": "0.34.5"
+  }
+}
