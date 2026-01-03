@@ -13,7 +13,7 @@ export async function requireRole(allowedRoles: Role[]) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/admin/login");
+  if (!user) redirect("/rt-admin-cosmic/login");
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -24,7 +24,7 @@ export async function requireRole(allowedRoles: Role[]) {
   const profileAny = profile as { role: Role } | null;
 
   if (!profileAny || !allowedRoles.includes(profileAny.role)) {
-    redirect("/admin/login?reason=forbidden");
+    redirect("/rt-admin-cosmic/login?reason=forbidden");
   }
 
   return { supabase, user, profile };

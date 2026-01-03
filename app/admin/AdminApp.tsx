@@ -475,6 +475,8 @@ function ProjectsAdmin({ supabase }: { supabase: ReturnType<typeof createBrowser
     category: "",
     tech_stack: [],
     featured: false,
+    show_on_home: false,
+    home_priority: null,
     github_url: "",
     demo_url: "",
     security_score: null,
@@ -536,6 +538,8 @@ function ProjectsAdmin({ supabase }: { supabase: ReturnType<typeof createBrowser
       category: row.category ?? "",
       tech_stack: row.tech_stack ?? [],
       featured: row.featured,
+      show_on_home: Boolean(row.show_on_home),
+      home_priority: row.home_priority ?? null,
       github_url: row.github_url ?? "",
       demo_url: row.demo_url ?? "",
       security_score: row.security_score,
@@ -558,6 +562,8 @@ function ProjectsAdmin({ supabase }: { supabase: ReturnType<typeof createBrowser
       github_url: form.github_url?.trim() ? form.github_url.trim() : null,
       demo_url: form.demo_url?.trim() ? form.demo_url.trim() : null,
       access_password: form.visibility === "password" ? (form.access_password?.trim() ? form.access_password.trim() : null) : null,
+      show_on_home: Boolean(form.show_on_home),
+      home_priority: Number.isFinite(form.home_priority) ? form.home_priority : null,
     };
 
     if (!payload.slug) {
@@ -640,6 +646,16 @@ function ProjectsAdmin({ supabase }: { supabase: ReturnType<typeof createBrowser
                           <span className="rounded-full border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] px-2 py-0.5 text-[11px] text-[var(--accent)]">
                             featured
                           </span>
+                        )}
+
+                        {r.show_on_home && (
+                          <span className="rounded-full border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] px-2 py-0.5 text-[11px] text-[var(--accent)]">
+                            home
+                          </span>
+                        )}
+
+                        {typeof r.home_priority === 'number' && (
+                          <span className="rounded-full bg-black/20 px-2 py-0.5 text-[11px] text-[var(--muted)]">p:{r.home_priority}</span>
                         )}
                         <span className="rounded-full bg-black/20 px-2 py-0.5 text-[11px] text-[var(--muted)]">
                           {r.visibility}
@@ -767,6 +783,20 @@ function ProjectsAdmin({ supabase }: { supabase: ReturnType<typeof createBrowser
               Featured on homepage
             </label>
 
+            <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
+              <input
+                type="checkbox"
+                checked={Boolean(form.show_on_home)}
+                onChange={(e) => setForm((p) => ({ ...p, show_on_home: e.target.checked }))}
+                className="h-4 w-4 rounded border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-transparent"
+              />
+              Show on homepage
+            </label>
+
+            <Field label="Home priority (higher = shown first)">
+              <TextInput type="number" value={form.home_priority ?? ""} onChange={(e) => setForm((p) => ({ ...p, home_priority: e.target.value ? Number(e.target.value) : null }))} placeholder="0" />
+            </Field>
+
             <Field label="Content (Markdown)">
               <TextArea value={form.content_md ?? ""} onChange={(e) => setForm((p) => ({ ...p, content_md: e.target.value }))} rows={10} placeholder="Full writeup in Markdown…" />
             </Field>
@@ -811,6 +841,8 @@ function BlogAdmin({ supabase }: { supabase: ReturnType<typeof createBrowserSupa
     reading_time_minutes: null,
     status: "draft",
     published_at: null,
+    show_on_home: false,
+    home_priority: null,
   });
 
   async function refresh() {
@@ -851,6 +883,8 @@ function BlogAdmin({ supabase }: { supabase: ReturnType<typeof createBrowserSupa
       reading_time_minutes: null,
       status: "draft",
       published_at: null,
+      show_on_home: false,
+      home_priority: null,
     });
   }
 
@@ -868,6 +902,8 @@ function BlogAdmin({ supabase }: { supabase: ReturnType<typeof createBrowserSupa
       reading_time_minutes: row.reading_time_minutes,
       status: row.status,
       published_at: row.published_at,
+      show_on_home: Boolean(row.show_on_home),
+      home_priority: row.home_priority ?? null,
     });
   }
 
@@ -884,6 +920,8 @@ function BlogAdmin({ supabase }: { supabase: ReturnType<typeof createBrowserSupa
       tags: Array.isArray(form.tags) ? form.tags : [],
       published_at: form.status === "published" ? (form.published_at ?? new Date().toISOString()) : null,
       reading_time_minutes: form.reading_time_minutes ?? null,
+      show_on_home: Boolean(form.show_on_home),
+      home_priority: Number.isFinite(form.home_priority) ? form.home_priority : null,
     };
 
     if (!payload.slug) {
@@ -955,6 +993,16 @@ function BlogAdmin({ supabase }: { supabase: ReturnType<typeof createBrowserSupa
                         <span className="rounded-full border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] px-2 py-0.5 text-[11px] text-[var(--accent)]">
                           {r.severity}
                         </span>
+
+                        {r.show_on_home && (
+                          <span className="rounded-full border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] px-2 py-0.5 text-[11px] text-[var(--accent)]">
+                            home
+                          </span>
+                        )}
+
+                        {typeof r.home_priority === 'number' && (
+                          <span className="rounded-full bg-black/20 px-2 py-0.5 text-[11px] text-[var(--muted)]">p:{r.home_priority}</span>
+                        )}
                       </div>
                       <p className="mt-1 truncate font-mono text-xs text-[var(--muted)]">{r.slug}</p>
                       <p className="mt-1 text-xs text-[var(--muted)]">Published: {fmtDateTime(r.published_at)}</p>
@@ -1043,11 +1091,25 @@ function BlogAdmin({ supabase }: { supabase: ReturnType<typeof createBrowserSupa
               <TextArea value={form.content_md ?? ""} onChange={(e) => setForm((p) => ({ ...p, content_md: e.target.value }))} rows={10} placeholder="Full article in Markdown…" />
             </Field>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-3">
               <Btn variant="primary" onClick={() => void save()}>
                 Save
               </Btn>
               {editing ? <Btn onClick={startNew}>Cancel</Btn> : null}
+
+              <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.show_on_home)}
+                  onChange={(e) => setForm((p) => ({ ...p, show_on_home: e.target.checked }))}
+                  className="h-4 w-4 rounded border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-transparent"
+                />
+                Show on homepage
+              </label>
+
+              <Field label="Home priority (higher = shown first)">
+                <TextInput type="number" value={form.home_priority ?? ""} onChange={(e) => setForm((p) => ({ ...p, home_priority: e.target.value ? Number(e.target.value) : null }))} placeholder="0" />
+              </Field>
             </div>
           </div>
         </div>
@@ -1117,6 +1179,8 @@ function CertsAdmin({ supabase }: { supabase: ReturnType<typeof createBrowserSup
       logo_url: "",
       pdf_url: "",
       description: "",
+      show_on_home: false,
+      home_priority: null,
     });
   }
 
@@ -1134,6 +1198,8 @@ function CertsAdmin({ supabase }: { supabase: ReturnType<typeof createBrowserSup
       logo_url: row.logo_url ?? "",
       pdf_url: row.pdf_url ?? "",
       description: row.description ?? "",
+      show_on_home: Boolean(row.show_on_home),
+      home_priority: row.home_priority ?? null,
     });
   }
 
@@ -1150,6 +1216,8 @@ function CertsAdmin({ supabase }: { supabase: ReturnType<typeof createBrowserSup
       pdf_url: form.pdf_url?.trim() ? form.pdf_url.trim() : null,
       description: form.description?.trim() ? form.description.trim() : null,
       prestige: Number.isFinite(form.prestige) ? form.prestige : 50,
+      show_on_home: Boolean(form.show_on_home),
+      home_priority: Number.isFinite(form.home_priority) ? form.home_priority : null,
     };
 
     if (!payload.name || !payload.name.trim()) {
@@ -1216,6 +1284,14 @@ function CertsAdmin({ supabase }: { supabase: ReturnType<typeof createBrowserSup
                       <p className="mt-1 text-xs text-[var(--muted)]">
                         {r.issuing_org ?? "—"} • prestige {r.prestige} • obtained {r.obtained_at ?? "—"}
                       </p>
+
+                      {r.show_on_home && (
+                        <span className="rounded-full border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] px-2 py-0.5 text-[11px] text-[var(--accent)]">home</span>
+                      )}
+
+                      {typeof r.home_priority === 'number' && (
+                        <span className="rounded-full bg-black/20 px-2 py-0.5 text-[11px] text-[var(--muted)]">p:{r.home_priority}</span>
+                      )}
                     </div>
                     <div className="flex items-center justify-end gap-2">
                       <Btn onClick={() => startEdit(r)}>Edit</Btn>
@@ -1277,11 +1353,20 @@ function CertsAdmin({ supabase }: { supabase: ReturnType<typeof createBrowserSup
               <TextArea value={form.description ?? ""} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} rows={5} placeholder="Short details…" />
             </Field>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-3">
               <Btn variant="primary" onClick={() => void save()}>
                 Save
               </Btn>
               {editing ? <Btn onClick={startNew}>Cancel</Btn> : null}
+
+              <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
+                <input type="checkbox" checked={Boolean(form.show_on_home)} onChange={(e) => setForm((p) => ({ ...p, show_on_home: e.target.checked }))} className="h-4 w-4 rounded border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-transparent" />
+                Show on homepage
+              </label>
+
+              <Field label="Home priority (higher = shown first)">
+                <TextInput type="number" value={form.home_priority ?? ""} onChange={(e) => setForm((p) => ({ ...p, home_priority: e.target.value ? Number(e.target.value) : null }))} placeholder="0" />
+              </Field>
             </div>
           </div>
         </div>

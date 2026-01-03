@@ -14,7 +14,7 @@ export default async function AdminHomePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/admin/login");
+  if (!user) redirect("/rt-admin-cosmic/login");
 
   const { data: profile, error } = await supabase
     .from("profiles")
@@ -25,7 +25,7 @@ export default async function AdminHomePage() {
   const profileAny = profile as ProfileRow | null;
 
   if (error || !profileAny || !ALLOWED_ROLES.includes(profileAny.role)) {
-    redirect("/admin/login?reason=forbidden");
+    redirect("/rt-admin-cosmic/login?reason=forbidden");
   }
 
   return (

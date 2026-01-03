@@ -1,0 +1,20 @@
+# Exclude the local Payload CMS app (dev-only) so Vercel does not upload or install it
+payload/
+
+# Exclude node_modules and local build artifacts
+node_modules/
+**/node_modules/
+.parcel-cache/
+.next/
+out/
+build/
+
+# Logs and env
+*.log
+.env
+.env.*
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/

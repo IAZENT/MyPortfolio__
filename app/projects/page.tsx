@@ -1,45 +1,33 @@
-import Link from "next/link";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { PROJECTS } from "@/lib/content/portfolio";
 import { ArrowRight, Github } from "lucide-react";
 
-export default function ProjectsPage() {
-  const projects = [
-    {
-      title: "Secure Enterprise Network Design",
-      category: "Network Security",
-      desc: "HQ + branch topology with VLANs, routing, redundancy, ACLs, monitoring.",
-      tags: ["VLAN", "OSPF", "ACL", "HSRP"],
-    },
-    {
-      title: "Web Application Penetration Testing Report",
-      category: "Web Security",
-      desc: "Auth & business-logic findings with OWASP-aligned methodology and documentation.",
-      tags: ["OWASP", "JWT", "Burp", "Reporting"],
-    },
-    {
-      title: "Digital Forensics Investigation",
-      category: "Forensics",
-      desc: "Phishing-driven malware chain reconstruction with timeline and evidence handling.",
-      tags: ["Artifacts", "Timeline", "Chain of Custody"],
-    },
-    {
-      title: "CTF & Security Labs",
-      category: "Offensive Security (Learning)",
-      desc: "Enumeration and exploitation practice with writeups and lessons learned.",
-      tags: ["CTF", "Enumeration", "Exploitation"],
-    },
-    {
-      title: "Packet Tracer Security Simulations",
-      category: "Networking (Academic)",
-      desc: "Segmentation, NAT/DHCP/DNS, logging, and hardening scenarios.",
-      tags: ["Packet Tracer", "NAT", "Syslog"],
-    },
-    {
-      title: "Secure API Concepts Study",
-      category: "Web Security",
-      desc: "Analysis of session security, input validation, and token-based protections.",
-      tags: ["AuthZ", "Sessions", "Validation"],
-    },
-  ];
+export default async function ProjectsPage() {
+  const supabase = await createServerSupabaseClient();
+  let rows: any[] = [];
+  try {
+    const resp = await supabase
+      .from("projects")
+      .select("id, title, category, summary")
+      .order("updated_at", { ascending: false })
+      .limit(100);
+    rows = resp.data ?? [];
+    if (process.env.NODE_ENV !== "production") console.log("[projects] fetched rows:", rows.length);
+  } catch (e) {
+    if (process.env.NODE_ENV !== "production") console.log("[projects] fetch error:", e);
+  }
+
+  const projectsFromDb = rows ?? [];
+  // merge with hardcoded PROJECTS as fallback
+  const seenProj = new Set(projectsFromDb.map((p: any) => p.title));
+  const hardcoded = PROJECTS.map((p) => ({
+    id: `hc-${p.title.replace(/\s+/g, "-").toLowerCase()}`,
+    title: p.title,
+    category: p.category,
+    summary: p.desc,
+  })).filter((p) => !seenProj.has(p.title));
+
+  const projects = projectsFromDb.concat(hardcoded);
 
   return (
     <main className="min-h-screen p-6">
@@ -48,8 +36,8 @@ export default function ProjectsPage() {
         <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Mission-critical projects</h1>
 
         <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {projects.map((p) => (
-            <div key={p.title} className="rounded-2xl border border-[color-mix(in_srgb,var(--accent)_20%,transparent)] bg-[color-mix(in_srgb,var(--bg1)_65%,transparent)] overflow-hidden">
+          {projects.map((p: any) => (
+            <div key={p.id} className="rounded-2xl border border-[color-mix(in_srgb,var(--accent)_20%,transparent)] bg-[color-mix(in_srgb,var(--bg1)_65%,transparent)] overflow-hidden">
               <div className="relative h-40 w-full">
                 <div className="absolute inset-0 bg-[linear-gradient(120deg,color-mix(in_srgb,var(--accent)_25%,transparent),transparent_55%)]" />
                 <div className="absolute inset-0 bg-[radial-gradient(800px_260px_at_10%_20%,rgba(255,255,255,0.10),transparent_55%)]" />
@@ -63,12 +51,10 @@ export default function ProjectsPage() {
                 </div>
 
                 <h3 className="text-base font-semibold">{p.title}</h3>
-                <p className="mt-2 line-clamp-2 text-sm text-[var(--muted)]">{p.desc}</p>
+                <p className="mt-2 line-clamp-2 text-sm text-[var(--muted)]">{p.summary}</p>
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {p.tags.slice(0, 4).map((t) => (
-                    <span key={t} className="rounded-lg bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] px-2 py-1 text-[11px] text-[var(--text)]">{t}</span>
-                  ))}
+                  {/* tags unknown */}
                 </div>
 
                 <div className="mt-4 flex items-center justify-between">
@@ -86,11 +72,6 @@ export default function ProjectsPage() {
           ))}
         </div>
 
-        <div className="mt-8 flex justify-center">
-          <Link href="/projects" className="inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] px-4 py-2 text-sm text-[var(--text)] transition hover:shadow-[0_0_20px_var(--glow)] focus-ring" aria-label="View all projects">
-            View All Projects <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-          </Link>
-        </div>
       </div>
     </main>
   );

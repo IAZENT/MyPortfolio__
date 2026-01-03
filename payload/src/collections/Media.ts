@@ -5,7 +5,7 @@ const Media: CollectionConfig = {
   slug: 'media',
   upload: {
     staticURL: '/media',
-    staticDir: path.resolve(__dirname, '../../uploads'),
+    staticDir: path.resolve(process.cwd(), 'uploads'),
     // imageSizes are optional; Cloudinary would replace this if you use Cloudinary adapter
     imageSizes: [
       { name: 'desktop', width: 1920 },

@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  mongo:
+    image: mongo:6
+    container_name: payload-mongo
+    restart: unless-stopped
+    ports:
+      - 27017:27017
+    volumes:
+      - payload-mongo-data:/data/db
+
+volumes:
+  payload-mongo-data:
+    name: payload-mongo-data

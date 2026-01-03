@@ -54,7 +54,7 @@ export default function AdminLoginPage() {
         if (session?.access_token && session?.refresh_token) {
           // prefer server-side HttpOnly cookie sync
           try {
-            await fetch("/api/auth/sync", {
+            const res = await fetch("/api/auth/sync", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({
@@ -62,6 +62,22 @@ export default function AdminLoginPage() {
                 refresh_token: session.refresh_token,
               }),
             });
+
+            // If the sync endpoint returned a user, we can short-circuit the
+            // later /api/auth/me polling and proceed immediately.
+            const syncJson = await res.json().catch(() => null);
+            if (syncJson?.ok && syncJson?.user) {
+              // Use a full navigation so the browser applies Set-Cookie headers
+              // reliably before the server-side render runs.
+              try {
+                window.location.replace("/rt-admin-cosmic");
+                return;
+              } catch (e) {
+                router.replace("/rt-admin-cosmic");
+                router.refresh();
+                return;
+              }
+            }
           } catch (e) {
             // fallback to client cookies if network call fails
             try {

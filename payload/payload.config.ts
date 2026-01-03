@@ -1,12 +1,12 @@
-import { buildConfig } from 'payload/config';
+import { buildConfig } from 'payload/config.js';
 import path from 'path';
-import Users from './src/collections/Users';
-import Posts from './src/collections/Posts';
-import Projects from './src/collections/Projects';
-import Certifications from './src/collections/Certifications';
-import Pages from './src/collections/Pages';
-import Media from './src/collections/Media';
-import Globals from './src/collections/Globals';
+import Users from './src/collections/Users.ts';
+import Posts from './src/collections/Posts.ts';
+import Projects from './src/collections/Projects.ts';
+import Certifications from './src/collections/Certifications.ts';
+import Pages from './src/collections/Pages.ts';
+import Media from './src/collections/Media.ts';
+import Globals from './src/collections/Globals.ts';
 
 export default buildConfig({
   serverURL: process.env.PAYLOAD_SERVER_URL || 'http://localhost:3001',

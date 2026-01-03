@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "payload dev --config ./payload.config.ts",
+    "dev": "node server.js",
     "build": "payload build --config ./payload.config.ts",
-    "start": "payload start --config ./payload.config.ts"
+    "start": "node server.js",
+    "create-admin": "node scripts/createAdmin.js"
   },
   "dependencies": {
     "payload": "^1.8.0",
@@ -13,6 +14,8 @@
   },
   "devDependencies": {
     "node-addon-api": "^8.5.0",
-    "node-gyp": "^12.1.0"
+    "node-gyp": "^12.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   }
 }

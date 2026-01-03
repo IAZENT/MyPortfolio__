@@ -238,12 +238,12 @@ export default function AdminApp({ profile }: { profile: ProfileRow }) {
   const setSection = (next: AdminSection) => {
     const sp = new URLSearchParams(params.toString());
     sp.set("section", next);
-    router.replace(`/admin?${sp.toString()}`);
+    router.replace(`/rt-admin-cosmic?${sp.toString()}`);
   };
 
   async function signOut() {
     await supabase.auth.signOut();
-    router.replace("/admin/login");
+    router.replace("/rt-admin-cosmic/login");
     router.refresh();
   }
 

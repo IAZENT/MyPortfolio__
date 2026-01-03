@@ -3,6 +3,7 @@
 // ... existing code ...
 import Image from "next/image";
 import Link from "next/link";
+import SectionCTA from "./components/SectionCTA";
 import {
   motion,
   useInView,
@@ -28,6 +29,8 @@ import {
   Terminal,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { SKILL_GROUPS, BLOG_POSTS, PROJECTS as HC_PROJECTS, CERTIFICATIONS as HC_CERTIFICATIONS, SERVICES as HC_SERVICES } from "@/lib/content/portfolio";
 
 type ThemeId = "red" | "matrix" | "purple" | "blue" | "amber";
 
@@ -40,7 +43,6 @@ type SectionDef = {
     | "certifications"
     | "blog"
     | "services"
-    | "vault"
     | "testimonials"
     | "contact";
   label: string;
@@ -48,14 +50,12 @@ type SectionDef = {
 
 const SECTIONS: SectionDef[] = [
   { id: "home", label: "Home" },
-  { id: "about", label: "About" },
   { id: "skills", label: "Skills" },
   { id: "projects", label: "Projects" },
   { id: "blog", label: "Blog" },
   { id: "certifications", label: "Certifications" },
   { id: "services", label: "Areas of Interest" },
-  { id: "vault", label: "Vault" },
-  { id: "testimonials", label: "Testimonials" },
+
   { id: "contact", label: "Contact" },
 ];
 
@@ -71,12 +71,69 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-function useTheme(): { theme: ThemeId; cycle: () => void } {
+function useTheme(): { theme: ThemeId; cycle: () => void; posts: Array<{ rep: string; sev: string; title: string; tags: string[]; time: string; slug: string }>; } {
   const [theme, setTheme] = useState<ThemeId>("red");
 
   useEffect(() => {
     const stored = window.localStorage.getItem("theme") as ThemeId | null;
     if (stored && THEMES.some((t) => t.id === stored)) setTheme(stored);
+  }, []);
+
+  const [posts, setPosts] = useState<
+    Array<{ rep: string; sev: string; title: string; tags: string[]; time: string; slug: string }>
+  >(() => []);
+
+  // fetch a few recent published posts for the home teaser
+  useEffect(() => {
+    const supabase = createBrowserSupabaseClient();
+    let mounted = true;
+
+    (async () => {
+      try {
+        const resp = await supabase
+          .from("blog_posts")
+          .select(
+            "id, slug, title, excerpt, tags, severity, reading_time_minutes, status, published_at"
+          )
+          .eq("status", "published")
+          .order("published_at", { ascending: false })
+          .limit(6);
+
+        const rows = resp.data ?? [];
+        if (!mounted) return;
+
+        const mapped = (rows ?? []).map((p: any) => ({
+          rep: (p.slug ?? p.id).toString().toUpperCase(),
+          title: p.title ?? "Untitled",
+          tags: p.tags ?? [],
+          time: p.reading_time_minutes ? `${p.reading_time_minutes} min` : "—",
+          slug: p.slug ?? p.id,
+          sev: p.severity ? p.severity.replace(/^(.)/, (m: string) => m.toUpperCase()) : "Medium",
+        }));
+
+        // merge with hardcoded BLOG_POSTS as fallback (do not remove them)
+        const seen = new Set(mapped.map((m) => m.slug));
+        const hardcoded = BLOG_POSTS.map((b) => ({
+          rep: b.rep,
+          sev: b.sev,
+          title: b.title,
+          tags: b.tags,
+          time: b.time,
+          slug: b.slug,
+        })).filter((b) => !seen.has(b.slug));
+
+        const all = mapped.concat(hardcoded);
+
+        setPosts(all);
+        if (process.env.NODE_ENV !== "production") console.log("[home] fetched posts:", all.length);
+      } catch (e) {
+        if (process.env.NODE_ENV !== "production") console.log("[home] posts fetch error:", e);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -97,7 +154,7 @@ function useTheme(): { theme: ThemeId; cycle: () => void } {
     });
   };
 
-  return { theme, cycle };
+  return { theme, cycle, posts };
 }
 
 function useActiveSection(): { active: SectionDef["id"]; setActive: (id: SectionDef["id"]) => void } {
@@ -577,7 +634,7 @@ function TiltCard({
 }
 
 export default function Home() {
-  const { theme, cycle } = useTheme();
+  const { theme, cycle, posts } = useTheme();
   const { active, setActive } = useActiveSection();
   const reduce = useReducedMotion();
 
@@ -606,43 +663,168 @@ export default function Home() {
 
   const currentThemeLabel = THEMES.find((t) => t.id === theme)?.label ?? "Theme";
 
-  const skills = useMemo(
-    () => [
-      {
-        group: "Security Tools",
-        items: [
-          { name: "Wireshark", level: 90 },
-          { name: "Nmap", level: 88 },
-          { name: "Burp Suite (Lab)", level: 82 },
-        ],
-      },
-      {
-        group: "Networking & Infrastructure",
-        items: [
-          { name: "VLANs & Inter-VLAN Routing", level: 88 },
-          { name: "OSPF / EIGRP (Academic)", level: 84 },
-          { name: "ACLs & NAT", level: 86 },
-        ],
-      },
-      {
-        group: "Web & App Security",
-        items: [
-          { name: "OWASP Top 10", level: 86 },
-          { name: "AuthN/AuthZ", level: 84 },
-          { name: "JWT Security (Analysis)", level: 80 },
-        ],
-      },
-      {
-        group: "Digital Forensics",
-        items: [
-          { name: "Timeline Reconstruction", level: 82 },
-          { name: "Artifact & Log Analysis", level: 84 },
-          { name: "Phishing Attack Analysis", level: 80 },
-        ],
-      },
-    ],
-    []
+  const [skills, setSkills] = useState<Array<{ group: string; items: Array<{ name: string; level: number }> }>>(
+    () => []
   );
+
+  // home preview: projects, certs, services (limited)
+  const [homeProjects, setHomeProjects] = useState<any[]>(() => []);
+  const [homeCerts, setHomeCerts] = useState<any[]>(() => []);
+  const [homeServices, setHomeServices] = useState<any[]>(() => []);
+
+
+  // fetch top skills from Supabase (client-side) so the home page shows editable data
+  useEffect(() => {
+    const supabase = createBrowserSupabaseClient();
+
+    let mounted = true;
+    (async () => {
+      try {
+        const resp = await supabase
+          .from("skills")
+          .select("id, name, category, proficiency")
+          .order("category", { ascending: true })
+          .order("proficiency", { ascending: false })
+          .limit(50);
+
+        const rows = resp.data ?? [];
+        if (!mounted) return;
+
+        const groups = (rows ?? []).reduce((acc: any, r: any) => {
+          const cat = r.category || "Other";
+          acc[cat] = acc[cat] || [];
+          acc[cat].push({ name: r.name, level: r.proficiency ?? 0 });
+          return acc;
+        }, {} as Record<string, Array<{ name: string; level: number }>>);
+
+        const grouped = Object.keys(groups).map((k) => ({ group: k, items: groups[k] }));
+
+        // merge with hardcoded SKILL_GROUPS (keep fetched first, then append unique hardcoded items)
+        const map = new Map<string, Map<string, { name: string; level: number }>>();
+        for (const g of grouped) {
+          const inner = new Map<string, { name: string; level: number }>();
+          for (const it of g.items) inner.set(it.name, it);
+          map.set(g.group, inner);
+        }
+
+        for (const hg of SKILL_GROUPS) {
+          const existing = map.get(hg.group);
+          if (!existing) {
+            map.set(hg.group, new Map(hg.items.map((it) => [it.name, it])));
+          } else {
+            for (const it of hg.items) {
+              if (!existing.has(it.name)) existing.set(it.name, it);
+            }
+          }
+        }
+
+        const mergedGroups = Array.from(map.entries()).map(([group, itemsMap]) => ({
+          group,
+          items: Array.from(itemsMap.values()),
+        }));
+
+        setSkills(mergedGroups);
+        if (process.env.NODE_ENV !== "production") console.log("[home] fetched skills:", rows.length);
+      } catch (e) {
+        if (process.env.NODE_ENV !== "production") console.log("[home] skills fetch error:", e);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // fetch limited projects, certs and services for home preview (respect home flags & priority)
+  useEffect(() => {
+    const supabase = createBrowserSupabaseClient();
+    let mounted = true;
+
+    (async () => {
+      try {
+        // projects: prefer show_on_home + home_priority, then fill with recent
+        const pResp = await supabase
+          .from("projects")
+          .select("id, title, category, summary, tags")
+          .eq("show_on_home", true)
+          .order("home_priority", { ascending: false })
+          .order("updated_at", { ascending: false })
+          .limit(6);
+
+        let projectsFromDb = (pResp.data ?? []) as any[];
+
+        if (projectsFromDb.length < 6) {
+          const remaining = 6 - projectsFromDb.length;
+          const excludeIds = projectsFromDb.map((p) => `'${p.id}'`).join(",");
+
+          let q = supabase.from("projects").select("id, title, category, summary, tags").order("updated_at", { ascending: false }).limit(remaining);
+          if (excludeIds) q = q.not("id", "in", `(${excludeIds})`);
+          const more = await q;
+          projectsFromDb = projectsFromDb.concat(more.data ?? []);
+        }
+
+        // certifications: prefer show_on_home + home_priority, then fill with prestige/obtained
+        const cResp = await supabase
+          .from("certifications")
+          .select("id, name, issuing_org as org, obtained_at as year")
+          .eq("show_on_home", true)
+          .order("home_priority", { ascending: false })
+          .order("obtained_at", { ascending: false })
+          .limit(6);
+        let certsFromDb = (cResp.data ?? []) as any[];
+        if (certsFromDb.length < 6) {
+          const remaining = 6 - certsFromDb.length;
+          const excludeIds = certsFromDb.map((c) => `'${c.id}'`).join(",");
+          let q2 = supabase.from("certifications").select("id, name, issuing_org as org, obtained_at as year").order("prestige", { ascending: false }).limit(remaining);
+          if (excludeIds) q2 = q2.not("id", "in", `(${excludeIds})`);
+          const more2 = await q2;
+          certsFromDb = certsFromDb.concat(more2.data ?? []);
+        }
+
+        // services: use existing sort_order / show_on_home
+        const sResp = await supabase
+          .from("services")
+          .select("id, name, bullets, icon, show_on_home")
+          .order("sort_order", { ascending: true })
+          .limit(6);
+        const servicesFromDb = (sResp.data ?? []) as any[];
+
+        if (!mounted) return;
+
+        // merge with hardcoded PROJECTS / CERTIFICATIONS / SERVICES as fallback
+        const seenProj = new Set(projectsFromDb.map((p) => p.title));
+        const hardProjects = HC_PROJECTS.map((p) => ({
+          id: `hc-${p.title.replace(/\s+/g, "-").toLowerCase()}`,
+          title: p.title,
+          category: p.category,
+          summary: p.desc,
+          tags: p.tags,
+        })).filter((p) => !seenProj.has(p.title));
+
+        const projectsAll = projectsFromDb.concat(hardProjects).slice(0, 6);
+
+        const seenCert = new Set(certsFromDb.map((c) => c.name));
+        const hardCerts = HC_CERTIFICATIONS.map((c) => ({ id: `hc-${c.name.replace(/\s+/g, "-").toLowerCase()}`, name: c.name, org: c.org, year: c.year })).filter((c) => !seenCert.has(c.name));
+        const certsAll = certsFromDb.concat(hardCerts).slice(0, 6);
+
+        const seenServ = new Set(servicesFromDb.map((s) => s.name));
+        const hardServ = HC_SERVICES.map((s) => ({ id: `hc-${s.title.replace(/\s+/g, "-").toLowerCase()}`, name: s.title, bullets: s.points })).filter((s) => !seenServ.has(s.name));
+        const servicesAll = servicesFromDb.concat(hardServ).slice(0, 6);
+
+        setHomeProjects(projectsAll);
+        setHomeCerts(certsAll);
+        setHomeServices(servicesAll);
+
+        if (process.env.NODE_ENV !== "production") console.log("[home] fetched previews: projects", projectsAll.length);
+      } catch (e) {
+        if (process.env.NODE_ENV !== "production") console.log("[home] preview fetch error:", e);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen">
@@ -880,150 +1062,27 @@ export default function Home() {
         </section>
 
         {/* ABOUT */}
-        <RevealSection
-          id="about"
-          title="// ABOUT ME"
-          subtitle="Securing Systems Through Knowledge, Practice, and Discipline"
-          className="py-16"
-        >
+        <RevealSection id="about" title="// ABOUT ME" subtitle="Securing Systems Through Knowledge, Practice, and Discipline" className="py-16">
           <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 sm:px-6 lg:grid-cols-[1.15fr_0.85fr]">
             <div className="space-y-5">
               <div className="glass rounded-2xl p-6">
                 <p className="text-[var(--muted)]">
-                  I am a cybersecurity student with a strong academic and practical foundation in
-                  network security, web application security, and digital forensics. My focus is on
-                  understanding how systems fail, how attackers exploit weaknesses, and how secure
-                  design can prevent real-world incidents.
+                  I am a cybersecurity student focused on hands-on learning: designing secure networks, testing assumptions in lab environments, and extracting lessons from incidents. I combine practical exercises (CTFs, packet-tracer simulations) with clear, evidence-driven writeups and reproducible lab work.
                 </p>
+
                 <p className="mt-4 text-[var(--muted)]">
-                  Through hands-on labs and coursework, I have worked extensively with enterprise-style
-                  network architectures, routing protocols, VLAN segmentation, redundancy mechanisms,
-                  and access control. I enjoy designing secure infrastructures and validating them
-                  through testing and analysis.
+                  My interests include web application security (OWASP-aligned testing), digital forensics, and defensive network design. I value clarity in reporting and strive to make complex findings actionable for technical and non-technical audiences.
                 </p>
-                <p className="mt-4 text-[var(--muted)]">
-                  My interest in cybersecurity extends to penetration testing and web security, where
-                  I study common vulnerabilities such as authentication flaws, injection attacks,
-                  business logic issues, and token-based security weaknesses. I approach security from
-                  both a defensive and analytical perspective.
-                </p>
-                <p className="mt-4 text-[var(--muted)]">
-                  I value ethical responsibility, continuous learning, and clear technical documentation.
-                  My goal is to grow into a skilled security professional who can contribute to secure
-                  systems, informed decision-making, and resilient digital environments.
-                </p>
-              </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {[
-                  "Cybersecurity & Networking student",
-                  "Hands-on experience with secure network design",
-                  "Web application security & OWASP Top 10",
-                  "Digital forensics and malware investigation (academic)",
-                  "CTF participation & security labs",
-                ].map((h) => (
-                  <div key={h} className="glass rounded-xl px-4 py-3">
-                    <div className="flex items-start gap-2">
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 text-[var(--accent)]" />
-                      <p className="text-sm text-[var(--text)]">{h}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <Link
-                  href="/about"
-                  className="inline-flex items-center gap-2 rounded-xl bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-4 py-2 text-sm text-[var(--text)] transition hover:shadow-[0_0_20px_var(--glow)] focus-ring"
-                  aria-label="Read full story"
-                >
-                  Read My Full Story <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-                </Link>
-
-                <div className="flex items-center gap-2">
-                  {/* GitHub */}
-                  <a
-                    className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
-                    href="https://github.com/IAZENT"
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="GitHub"
-                  >
-                    <Github className="h-4 w-4 text-[var(--muted)]" />
-                  </a>
-
-                  {/* LinkedIn */}
-                  <a
-                    className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
-                    href="https://www.linkedin.com/in/rupesh-thakur-aa98702a7/"
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="LinkedIn"
-                  >
-                    <Linkedin className="h-4 w-4 text-[var(--muted)]" />
-                  </a>
-
-                  {/* Email */}
-                  <a
-                    className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
-                    href="mailto:rupeshthakur443@gmail.com"
-                    aria-label="Email"
-                  >
-                    <Mail className="h-4 w-4 text-[var(--muted)]" />
-                  </a>
-
-                  {/* TryHackMe */}
-                  <a
-                    className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
-                    href="https://tryhackme.com/p/Cosmic777"
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="TryHackMe"
-                  >
-                    <Skull className="h-4 w-4 text-[var(--muted)]" />
-                  </a>
-
-                  {/* Hack The Box */}
-                  <a
-                    className="glass inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:neon focus-ring"
-                    href="https://app.hackthebox.com/users/1936521"
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="Hack The Box"
-                  >
-                    <Shield className="h-4 w-4 text-[var(--muted)]" />
-                  </a>
+                <div className="mt-6">
+                  <SectionCTA href="/about" label="Read full story" ariaLabel="Read full about page" />
                 </div>
               </div>
             </div>
 
             <div className="relative">
               <div className="glass neon rounded-2xl p-6">
-                <div className="mb-4 flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-[var(--accent)]" />
-                  <p className="font-mono text-xs tracking-[0.22em] text-[var(--muted)]">
-                    PROFILE SNAPSHOT
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  {[
-                    { k: "Location", v: "Nepal (Remote-friendly)" },
-                    { k: "Availability", v: "Open to internships & research" },
-                    { k: "Focus", v: "Network Security • Web Security • Forensics" },
-                    { k: "Style", v: "Ethical • Lab-driven • Documented" },
-                  ].map((row) => (
-                    <div key={row.k} className="flex items-center justify-between gap-3">
-                      <span className="text-sm text-[var(--muted)]">{row.k}</span>
-                      <span className="text-sm text-[var(--text)]">{row.v}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-6 rounded-xl border border-[color-mix(in_srgb,var(--border)_75%,transparent)] bg-[color-mix(in_srgb,var(--bg1)_70%,transparent)] p-4">
-                  <p className="font-mono text-xs text-[var(--success)]">
-                    {">"} Designing secure networks, testing assumptions, and learning from incidents.
-                  </p>
-                </div>
+                <p className="font-mono text-xs text-[var(--success)]">&gt; Designing secure networks, testing assumptions, and learning from incidents.</p>
               </div>
 
               <div aria-hidden className="absolute -inset-6 -z-10 blur-3xl">
@@ -1069,15 +1128,7 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="mt-8 flex justify-center">
-              <Link
-                href="/skills"
-                className="inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] px-4 py-2 text-sm text-[var(--text)] transition hover:shadow-[0_0_20px_var(--glow)] focus-ring"
-                aria-label="View full skills"
-              >
-                View Full Arsenal <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-              </Link>
-            </div>
+            <SectionCTA href="/skills" label="View Full Arsenal" ariaLabel="View full skills" />
           </div>
         </RevealSection>
 
@@ -1090,45 +1141,8 @@ export default function Home() {
         >
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {[
-                {
-                  title: "Secure Enterprise Network Design",
-                  category: "Network Security",
-                  desc: "HQ + branch topology with VLANs, routing, redundancy, ACLs, monitoring.",
-                  tags: ["VLAN", "OSPF", "ACL", "HSRP"],
-                },
-                {
-                  title: "Web Application Penetration Testing Report",
-                  category: "Web Security",
-                  desc: "Auth & business-logic findings with OWASP-aligned methodology and documentation.",
-                  tags: ["OWASP", "JWT", "Burp", "Reporting"],
-                },
-                {
-                  title: "Digital Forensics Investigation",
-                  category: "Forensics",
-                  desc: "Phishing-driven malware chain reconstruction with timeline and evidence handling.",
-                  tags: ["Artifacts", "Timeline", "Chain of Custody"],
-                },
-                {
-                  title: "CTF & Security Labs",
-                  category: "Offensive Security (Learning)",
-                  desc: "Enumeration and exploitation practice with writeups and lessons learned.",
-                  tags: ["CTF", "Enumeration", "Exploitation"],
-                },
-                {
-                  title: "Packet Tracer Security Simulations",
-                  category: "Networking (Academic)",
-                  desc: "Segmentation, NAT/DHCP/DNS, logging, and hardening scenarios.",
-                  tags: ["Packet Tracer", "NAT", "Syslog"],
-                },
-                {
-                  title: "Secure API Concepts Study",
-                  category: "Web Security",
-                  desc: "Analysis of session security, input validation, and token-based protections.",
-                  tags: ["AuthZ", "Sessions", "Validation"],
-                },
-              ].map((p) => (
-                <TiltCard key={p.title} className="overflow-hidden">
+              {homeProjects.map((p) => (
+                <TiltCard key={p.id ?? p.title} className="overflow-hidden">
                   <div className="relative h-40 w-full">
                     <div className="absolute inset-0 bg-[linear-gradient(120deg,color-mix(in_srgb,var(--accent)_25%,transparent),transparent_55%)]" />
                     <div className="absolute inset-0 bg-[radial-gradient(800px_260px_at_10%_20%,rgba(255,255,255,0.10),transparent_55%)]" />
@@ -1144,10 +1158,10 @@ export default function Home() {
                     </div>
 
                     <h3 className="text-base font-semibold">{p.title}</h3>
-                    <p className="mt-2 line-clamp-2 text-sm text-[var(--muted)]">{p.desc}</p>
+                    <p className="mt-2 line-clamp-2 text-sm text-[var(--muted)]">{p.desc ?? p.summary}</p>
 
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {p.tags.slice(0, 4).map((t) => (
+                      {(p.tags ?? []).slice(0, 4).map((t: string) => (
                         <span
                           key={t}
                           className="rounded-lg bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] px-2 py-1 text-[11px] text-[var(--text)]"
@@ -1158,14 +1172,9 @@ export default function Home() {
                     </div>
 
                     <div className="mt-4 flex items-center justify-between">
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-2 rounded-xl bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-3 py-2 text-xs text-[var(--text)] transition hover:shadow-[0_0_18px_var(--glow)] focus-ring"
-                        onClick={() => {}}
-                        aria-label={`View details for ${p.title} (placeholder)`}
-                      >
+                      <Link href={`/projects/${p.id}`} className="inline-flex items-center gap-2 rounded-xl bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-3 py-2 text-xs text-[var(--text)] transition hover:shadow-[0_0_18px_var(--glow)] focus-ring" aria-label={`View details for ${p.title}`}>
                         View Details <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-                      </button>
+                      </Link>
 
                       <div className="flex items-center gap-2 text-[11px] text-[var(--muted)]">
                         <Github className="h-4 w-4" />
@@ -1177,15 +1186,7 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="mt-8 flex justify-center">
-              <Link
-                href="/projects"
-                className="inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] px-4 py-2 text-sm text-[var(--text)] transition hover:shadow-[0_0_20px_var(--glow)] focus-ring"
-                aria-label="View all projects"
-              >
-                View All Projects <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-              </Link>
-            </div>
+            <SectionCTA href="/projects" label="View All Projects" ariaLabel="View all projects" />
           </div>
         </RevealSection>
 
@@ -1198,14 +1199,7 @@ export default function Home() {
         >
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {[
-                { rep: "REP-001", sev: "Medium", title: "JWT pitfalls: where analysis often misses", tags: ["JWT", "Auth"], time: "6 min" },
-                { rep: "REP-002", sev: "High", title: "OWASP Top 10 in practice: lab notes", tags: ["OWASP", "Web"], time: "8 min" },
-                { rep: "REP-003", sev: "Low", title: "Packet Tracer hardening checklist", tags: ["Network", "Labs"], time: "5 min" },
-                { rep: "REP-004", sev: "Medium", title: "Forensics timeline reconstruction basics", tags: ["Forensics"], time: "7 min" },
-                { rep: "REP-005", sev: "High", title: "Authentication logic flaws: patterns to watch", tags: ["Auth", "Logic"], time: "9 min" },
-                { rep: "REP-006", sev: "Medium", title: "Recon workflows: from Nmap to hypotheses", tags: ["Nmap", "Recon"], time: "6 min" },
-              ].map((b) => (
+              {posts.map((b) => (
                 <TiltCard key={b.rep} className="p-6">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs text-[var(--muted)]">{b.rep}</span>
@@ -1230,9 +1224,9 @@ export default function Home() {
                   <div className="mt-4 flex items-center justify-between text-xs text-[var(--muted)]">
                     <span>Reading time: {b.time}</span>
                     <Link
-                      href="/blog"
+                      href={`/blog/${b.slug}`}
                       className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-[var(--text)] transition hover:shadow-[0_0_18px_var(--glow)] focus-ring"
-                      aria-label={`Read ${b.rep}`}
+                      aria-label={`Read ${b.slug}`}
                     >
                       Read <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
                     </Link>
@@ -1241,15 +1235,7 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="mt-8 flex justify-center">
-              <Link
-                href="/blog"
-                className="inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] px-4 py-2 text-sm text-[var(--text)] transition hover:shadow-[0_0_20px_var(--glow)] focus-ring"
-                aria-label="View all reports"
-              >
-                View All Reports <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-              </Link>
-            </div>
+            <SectionCTA href="/blog" label="View All Reports" ariaLabel="View all reports" />
           </div>
         </RevealSection>
 
@@ -1268,15 +1254,9 @@ export default function Home() {
               </div>
 
               <div className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {[
-                  { name: "Academic Coursework in Cybersecurity", org: "University", year: "2024" },
-                  { name: "Digital Forensics Practical Assessment", org: "Academic", year: "2024" },
-                  { name: "Web Security & Pentesting Labs", org: "Academic", year: "2023–2025" },
-                  { name: "IEEE × Logpoint CTF", org: "Participant", year: "2024" },
-                  { name: "University Security Competitions", org: "Participant", year: "2023–2025" },
-                ].map((c) => (
+                {homeCerts.map((c) => (
                   <div
-                    key={c.name}
+                    key={c.id ?? c.name}
                     className="min-w-[260px] rounded-2xl border border-[color-mix(in_srgb,var(--accent)_45%,transparent)] bg-[color-mix(in_srgb,var(--bg1)_65%,transparent)] p-4 hover:shadow-[0_0_22px_var(--glow)] transition"
                   >
                     <div className="mb-3 flex items-center justify-between">
@@ -1300,15 +1280,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="mt-8 flex justify-center">
-              <Link
-                href="/certifications"
-                className="inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] px-4 py-2 text-sm text-[var(--text)] transition hover:shadow-[0_0_20px_var(--glow)] focus-ring"
-                aria-label="View all achievements"
-              >
-                View All Achievements <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-              </Link>
-            </div>
+            <SectionCTA href="/certifications" label="View All Achievements" ariaLabel="View all achievements" />
           </div>
         </RevealSection>
 
@@ -1321,33 +1293,16 @@ export default function Home() {
         >
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {[
-                {
-                  title: "Network Security Design (Academic & Lab)",
-                  points: ["Segmentation (VLANs)", "Routing & redundancy", "ACLs and policy controls", "Monitoring concepts"],
-                },
-                {
-                  title: "Web Application Security Testing (Learning)",
-                  points: ["OWASP-aligned workflow", "Auth/session analysis", "Logic flaw modeling", "Clear reporting"],
-                },
-                {
-                  title: "Security Research & Documentation",
-                  points: ["Writeups & incident notes", "Threat modeling basics", "Evidence-driven reasoning", "Readable diagrams"],
-                },
-                {
-                  title: "Cybersecurity Labs & Simulations",
-                  points: ["Packet Tracer scenarios", "CTF practice", "Forensics exercises", "Post-lab reflections"],
-                },
-              ].map((s) => (
-                <TiltCard key={s.title} className="p-6">
+              {homeServices.map((s) => (
+                <TiltCard key={s.id ?? s.title ?? s.name} className="p-6">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-base font-semibold">{s.title}</h3>
+                    <h3 className="text-base font-semibold">{s.title ?? s.name}</h3>
                     <span className="rounded-full bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-2 py-0.5 text-[11px] text-[var(--muted)]">
                       focus
                     </span>
                   </div>
                   <ul className="mt-3 space-y-2 text-sm text-[var(--muted)]">
-                    {s.points.map((p) => (
+                    {(s.bullets ?? s.points ?? []).map((p: any) => (
                       <li key={p} className="flex items-start gap-2">
                         <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
                         <span>{p}</span>
@@ -1368,69 +1323,8 @@ export default function Home() {
           </div>
         </RevealSection>
 
-        {/* VAULT teaser */}
-        <RevealSection
-          id="vault"
-          title="// THE VAULT"
-          subtitle="For those who can find it..."
-          className="py-16"
-        >
-          <div className="mx-auto max-w-6xl px-4 sm:px-6">
-            <div className="glass neon relative overflow-hidden rounded-2xl p-8">
-              <div className="absolute inset-0 bg-[radial-gradient(900px_260px_at_10%_10%,rgba(255,255,255,0.10),transparent_55%)]" />
-              <div className="relative grid grid-cols-1 items-center gap-8 md:grid-cols-[0.65fr_1.35fr]">
-                <div className="flex justify-center">
-                  <motion.div
-                    animate={reduce ? undefined : { rotate: [0, 3, 0, -3, 0] }}
-                    transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-                    className="grid h-24 w-24 place-items-center rounded-[28px] border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] bg-[color-mix(in_srgb,var(--bg1)_65%,transparent)] shadow-[0_0_28px_var(--glow)]"
-                  >
-                    <Lock className="h-10 w-10 text-[var(--accent)]" />
-                  </motion.div>
-                </div>
 
-                <div>
-                  <p className="font-mono text-xs tracking-[0.26em] text-[var(--muted)]">
-                    ENCRYPTED TEASER
-                  </p>
-                  <p className="mt-3 text-sm text-[var(--muted)]">
-                    Hidden throughout this site are clues. Some are obvious. Some are buried in
-                    patterns. The vault unlocks only for those who read like analysts.
-                  </p>
 
-                  <div className="mt-4 rounded-xl border border-[color-mix(in_srgb,var(--border)_75%,transparent)] bg-black/40 p-4">
-                    <p className="font-mono text-xs text-[var(--success)]">
-                      4e 6f 74 20 61 6c 6c 20 73 65 63 72 65 74 73 20 61 72 65 20 68 69 64 64 65 6e 2e
-                    </p>
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    <Link
-                      href="/vault"
-                      className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-black transition hover:shadow-[0_0_22px_var(--glow)] focus-ring"
-                      aria-label="Enter the vault"
-                    >
-                      Enter The Vault <ArrowRight className="h-4 w-4" />
-                    </Link>
-                    <span className="inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--accent)_50%,transparent)] px-4 py-2 text-sm text-[var(--muted)]">
-                      Hint: ↑↑↓↓←→←→BA
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </RevealSection>
-
-        {/* TESTIMONIALS (placeholder carousel UI) */}
-        <RevealSection
-          id="testimonials"
-          title="// VERIFIED TESTIMONIALS"
-          subtitle="Signals of trust"
-          className="py-16"
-        >
-          <Testimonials />
-        </RevealSection>
 
         {/* CONTACT */}
         <RevealSection
@@ -1481,23 +1375,7 @@ export default function Home() {
               </ul>
             </div>
 
-            <div>
-              <p className="mb-3 text-sm font-semibold">Resources</p>
-              <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-[var(--muted)]">
-                {["Security Blog", "CTF Writeups", "Case Studies", "Privacy Policy"].map((l) => (
-                  <li key={l}>
-                    <a
-                      href="#"
-                      onClick={(e) => e.preventDefault()}
-                      className="inline-flex w-full items-center justify-center rounded-lg px-2 py-1 text-center transition hover:text-[var(--text)] hover:neon focus-ring"
-                      aria-label={`${l} (placeholder)`}
-                    >
-                      {l}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {/* Resources block removed per request */}
           </div>
 
           <div className="border-t border-[color-mix(in_srgb,var(--border)_70%,transparent)]">
@@ -1522,103 +1400,6 @@ export default function Home() {
   );
 }
 
-function Testimonials() {
-  const reduce = useReducedMotion();
-  const items = useMemo(
-    () => [
-      {
-        quote:
-          "Strong documentation, consistent lab work, and a careful approach to networking and security concepts.",
-        name: "Faculty / Mentor",
-        role: "Academic Reference (placeholder)",
-      },
-      {
-        quote:
-          "Shows great discipline in investigation: gathers evidence first, explains decisions clearly, and improves iteratively.",
-        name: "Lab Supervisor",
-        role: "Practical Assessment (placeholder)",
-      },
-      {
-        quote:
-          "Good fundamentals in web security and routing—asks the right questions and communicates risks clearly.",
-        name: "Peer Reviewer",
-        role: "CTF / Study Group (placeholder)",
-      },
-    ],
-    []
-  );
-
-  const [i, setI] = useState(0);
-
-  useEffect(() => {
-    if (reduce) return;
-    const t = window.setInterval(() => setI((p) => (p + 1) % items.length), 5000);
-    return () => window.clearInterval(t);
-  }, [reduce, items.length]);
-
-  const current = items[i] ?? items[0]!;
-
-  return (
-    <div className="mx-auto max-w-6xl px-4 sm:px-6">
-      <div className="glass neon rounded-2xl p-6">
-        <div className="flex items-center justify-between gap-3">
-          <p className="font-mono text-xs tracking-[0.24em] text-[var(--muted)]">CAROUSEL</p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setI((p) => (p - 1 + items.length) % items.length)}
-              className="glass rounded-xl px-3 py-2 text-xs text-[var(--muted)] transition hover:text-[var(--text)] focus-ring"
-              aria-label="Previous testimonial"
-            >
-              Prev
-            </button>
-            <button
-              type="button"
-              onClick={() => setI((p) => (p + 1) % items.length)}
-              className="glass rounded-xl px-3 py-2 text-xs text-[var(--muted)] transition hover:text-[var(--text)] focus-ring"
-              aria-label="Next testimonial"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-
-        <motion.div
-          key={i}
-          initial={reduce ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
-          className="mt-5"
-        >
-          <p className="text-lg leading-7 text-[var(--text)]">"{current.quote}"</p>
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold">{current.name}</p>
-              <p className="text-xs text-[var(--muted)]">{current.role}</p>
-            </div>
-            <div className="flex items-center gap-1 text-[var(--accent)]" aria-label="5 star rating (placeholder)">
-              {"★★★★★".split("").map((s, idx) => (
-                <span key={idx} className="text-sm">
-                  {s}
-                </span>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-
-        <div className="mt-5 flex justify-center">
-          <Link
-            href="/services"
-            className="inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] px-4 py-2 text-sm text-[var(--text)] transition hover:shadow-[0_0_20px_var(--glow)] focus-ring"
-            aria-label="View all testimonials"
-          >
-            View All <ArrowRight className="h-4 w-4 text-[var(--accent)]" />
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function ContactSection() {
   return (
@@ -1672,7 +1453,7 @@ function ContactSection() {
 
           <div className="mt-5 rounded-xl border border-[color-mix(in_srgb,var(--border)_75%,transparent)] bg-[color-mix(in_srgb,var(--bg1)_70%,transparent)] p-4">
             <p className="text-sm text-[var(--muted)]">
-              Please email me directly. I don&apos;t accept contact form messages via this site.
+              Please email me directly. I aim to respond within 24–48 hours. For urgent matters, indicate "URGENT" in the subject line.
             </p>
           </div>
         </div>

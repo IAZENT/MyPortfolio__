@@ -30,6 +30,8 @@ export type Database = {
           tags: string[]
           title: string
           updated_at: string
+          show_on_home: boolean
+          home_priority: number | null
         }
         Insert: {
           category?: string | null
@@ -46,6 +48,8 @@ export type Database = {
           tags?: string[]
           title: string
           updated_at?: string
+          show_on_home?: boolean
+          home_priority?: number | null
         }
         Update: {
           category?: string | null
@@ -62,6 +66,8 @@ export type Database = {
           tags?: string[]
           title?: string
           updated_at?: string
+          show_on_home?: boolean
+          home_priority?: number | null
         }
         Relationships: []
       }
@@ -81,6 +87,8 @@ export type Database = {
           prestige: number
           updated_at: string
           verify_url: string | null
+          show_on_home: boolean
+          home_priority: number | null
         }
         Insert: {
           category?: string | null
@@ -97,6 +105,8 @@ export type Database = {
           prestige?: number
           updated_at?: string
           verify_url?: string | null
+          show_on_home?: boolean
+          home_priority?: number | null
         }
         Update: {
           category?: string | null
@@ -113,6 +123,8 @@ export type Database = {
           prestige?: number
           updated_at?: string
           verify_url?: string | null
+          show_on_home?: boolean
+          home_priority?: number | null
         }
         Relationships: []
       }
@@ -212,6 +224,8 @@ export type Database = {
           title: string
           updated_at: string
           visibility: Database["public"]["Enums"]["project_visibility"]
+          show_on_home: boolean
+          home_priority: number | null
         }
         Insert: {
           access_password?: string | null
@@ -230,6 +244,8 @@ export type Database = {
           title: string
           updated_at?: string
           visibility?: Database["public"]["Enums"]["project_visibility"]
+          show_on_home?: boolean
+          home_priority?: number | null
         }
         Update: {
           access_password?: string | null
@@ -248,6 +264,8 @@ export type Database = {
           title?: string
           updated_at?: string
           visibility?: Database["public"]["Enums"]["project_visibility"]
+          show_on_home?: boolean
+          home_priority?: number | null
         }
         Relationships: []
       }
